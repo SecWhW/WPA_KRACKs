@@ -1,0 +1,981 @@
+theory wpa_gtk_check_gtkkeys begin
+
+// Function signature and definition of the equational theory E
+
+builtins: multiset, natural-numbers
+functions: KDF/1, MIC/2, N/1, S/1, fst/1, pair/2, sdec/2, senc/2,
+           snd/1, sndec/2, snenc/4
+equations:
+    fst(<x.1, x.2>) = x.1,
+    sdec(senc(x.1, x.2), x.2) = x.1,
+    snd(<x.1, x.2>) = x.2,
+    sndec(snenc(message, key, IVnonce, IVnat), key) = message
+
+
+
+restriction Neq:
+  "∀ x y #i. (Neq( x, y ) @ #i) ⇒ (¬(x = y))"
+  // safety formula
+
+restriction OnlyOneAssociate:
+  "∀ suppID authID PMK tid1 tid2 #i #j.
+    ((Associate( authID, suppID, tid1, PMK ) @ #i) ∧
+     (Associate( authID, suppID, tid2, PMK ) @ #j)) ⇒
+    ((#i = #j) ∧ (tid1 = tid2))"
+  // safety formula
+
+restriction OnlyOneSupp:
+  "∀ suppID1 suppID2 #i #j.
+    ((Supp_Creat( suppID1 ) @ #i) ∧ (Supp_Creat( suppID2 ) @ #j)) ⇒
+    ((#i = #j) ∧ (suppID1 = suppID2))"
+  // safety formula
+
+restriction OnlyOneAuth:
+  "∀ ID1 ID2 #i #j.
+    ((Auth_Creat( ID1 ) @ #i) ∧ (Auth_Creat( ID2 ) @ #j)) ⇒
+    ((#i = #j) ∧ (ID1 = ID2))"
+  // safety formula
+
+restriction OnlyOnePMK:
+  "∀ PMK1 PMK2 #i #j.
+    ((PMK_Gen( PMK1 ) @ #i) ∧ (PMK_Gen( PMK2 ) @ #j)) ⇒
+    ((#i = #j) ∧ (PMK1 = PMK2))"
+  // safety formula
+
+restriction AuthSndGtkAgain:
+  "∀ suppID authID tid ctr gtk loop ctr1 #i #j.
+    (((¬(ctr = ctr1)) ∧
+      (Auth_Snd_GTK_Again( authID, suppID, tid, ctr, loop, gtk ) @ #i)) ∧
+     (Auth_Snd_GTK_Again( authID, suppID, tid, ctr1, loop, gtk
+      ) @ #j)) ⇒
+    (#i = #j)"
+  // safety formula
+
+restriction MemoryCanBeFreedOnlyOnce:
+  "∀ pointer #i #j.
+    ((Free( pointer ) @ #i) ∧ (Free( pointer ) @ #j)) ⇒ (#i = #j)"
+  // safety formula
+
+rule (modulo E) Supp_Create:
+   [ Fr( ~suppID ) ]
+  --[ Supp_Creat( ~suppID ) ]->
+   [ !Supp( ~suppID ), Out( ~suppID ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Auth_Create:
+   [ Fr( ~authID ), Fr( ~x ) ]
+  --[ Auth_Creat( ~authID ) ]->
+   [ !Auth( ~authID ), Out( ~authID ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Auth_Supp_PMK_TID:
+   [ Fr( ~PMK ), !Auth( ~authID ), !Supp( ~suppID ) ]
+  --[ PMK_Gen( ~PMK ) ]->
+   [ !PMKey( ~PMK, ~authID, ~suppID, 'NULL' ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Auth_Associate_With_Supp:
+   [
+   !PMKey( ~PMK, ~authID, ~suppID, 'NULL' ), Fr( ~tid ), Fr( ~gtk ),
+   Fr( ~gtk1 ), Fr( ~gtk2 ), Fr( ~wnm1 ), Fr( ~wnm2 ), Fr( ~ptk ),
+   Fr( ~oldctr ), Fr( ~AuthIV ), Fr( ~SuppIV ), Fr( ~point ),
+   Fr( ~Loop )
+   ]
+  --[ Associate( ~authID, ~suppID, ~tid, ~PMK ) ]->
+   [
+   AuthGTK( 'INIT_GTK', ~authID, ~suppID, ~tid, ~ptk, ~gtk, ~oldctr,
+            ~Loop, ~SuppIV, 1, ~AuthIV, 1
+   ),
+   SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk,
+            <~gtk, ~gtk1, ~gtk2, ~wnm1, ~wnm2, '1'>, ~oldctr, ~Loop, ~AuthIV,
+            1, ~SuppIV, 1
+   ),
+   !PMKey( ~PMK, ~authID, ~suppID, ~tid ),
+   !GTK_Shared_Data( 'INIT', ~suppID, ~authID, ~tid, ~ptk,
+                     <~gtk, ~gtk1, ~gtk2, ~wnm1, ~wnm2, '1'>, ~point
+   )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Auth_Snd_Gtk:
+   [
+   AuthGTK( 'INIT_GTK', ~authID, ~suppID, ~tid, ~ptk, oldgtk, ctr,
+            ~loop, SuppIV, %PIV, AuthIV, %AIV
+   ),
+   Fr( ~gKey )
+   ]
+  --[ Auth_Snd_GTK( ~authID, ~suppID, ~tid, S(ctr), ~loop, ~gKey )
+  ]->
+   [
+   AuthGTK( 'GTK_NEGOTIATING', ~authID, ~suppID, ~tid, ~ptk, ~gKey,
+            S(ctr), ~loop, SuppIV, %PIV, AuthIV, (%AIV%+1)
+   ),
+   Out( snenc(<'gtk_m1', ~gKey, S(ctr)>, ~ptk, AuthIV, N(%AIV)) )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Auth_Snd_Gtk_Repeat:
+   [
+   AuthGTK( 'GTK_NEGOTIATING', ~authID, ~suppID, ~tid, ~ptk, gtk, ctr,
+            ~loop, SuppIV, %PIV, AuthIV, %AIV
+   )
+   ]
+  --[
+  Auth_Snd_GTK_Again( ~authID, ~suppID, ~tid, S(ctr), ~loop, gtk )
+  ]->
+   [
+   AuthGTK( 'GTK_NEGOTIATING', ~authID, ~suppID, ~tid, ~ptk, gtk,
+            S(ctr), ~loop, SuppIV, %PIV, AuthIV, (%AIV%+1)
+   ),
+   Out( snenc(<'gtk_m1', gtk, S(ctr)>, ~ptk, AuthIV, N(%AIV)) )
+   ]
+
+  // loop breaker: [0]
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Supp_Rcv_Gtk_1:
+   [
+   SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk,
+            <gtk, gtk1, gtk2, ~wnm1, ~wnm2, '1'>, ctr, ~loop, AuthIV, %AIV,
+            SuppIV, %PIV
+   ),
+   In( snenc(<'gtk_m1', gKey, S(ctr)>, ~ptk, newAuthIV, N(%newAIV)) )
+   ]
+  --[
+  Supp_Install_GTK( ~suppID, ~authID, ~tid, S(ctr), ~loop, gtk1,
+                    gtk2, gKey, gtk2
+  ),
+  Neq( gKey, gtk1 ), Neq( gKey, gtk2 )
+  ]->
+   [
+   SuppGTK( 'GTK_NEGOTIATING', ~suppID, ~authID, ~tid, ~ptk,
+            <gKey, gKey, gtk2, ~wnm1, ~wnm2, '2'>, S(ctr), ~loop, newAuthIV,
+            %newAIV, SuppIV, (%PIV%+1)
+   ),
+   SuppGTK( 'Wait_GTKData', ~suppID, ~authID, ~tid, ~ptk,
+            <gKey, gKey, gtk2, ~wnm1, ~wnm2, '2'>, S(ctr), ~loop, newAuthIV,
+            %newAIV, SuppIV, (%PIV%+1)
+   ),
+   Out( snenc(<'gtk_m2', S(ctr)>, ~ptk, SuppIV, N(%PIV)) )
+   ]
+
+  // loop breaker: [0]
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Supp_Rcv_Gtk_2:
+   [
+   SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk,
+            <gtk, gtk1, gtk2, ~wnm1, ~wnm2, '2'>, ctr, ~loop, AuthIV, %AIV,
+            SuppIV, %PIV
+   ),
+   In( snenc(<'gtk_m1', gKey, S(ctr)>, ~ptk, newAuthIV, N(%newAIV)) )
+   ]
+  --[
+  Supp_Install_GTK( ~suppID, ~authID, ~tid, S(ctr), ~loop, gtk1,
+                    gtk2, gtk1, gKey
+  ),
+  Neq( gKey, gtk1 ), Neq( gKey, gtk2 )
+  ]->
+   [
+   SuppGTK( 'GTK_NEGOTIATING', ~suppID, ~authID, ~tid, ~ptk,
+            <gKey, gtk1, gKey, ~wnm1, ~wnm2, '1'>, S(ctr), ~loop, newAuthIV,
+            %newAIV, SuppIV, (%PIV%+1)
+   ),
+   SuppGTK( 'Wait_GTKData', ~suppID, ~authID, ~tid, ~ptk,
+            <gKey, gtk1, gKey, ~wnm1, ~wnm2, '1'>, S(ctr), ~loop, newAuthIV,
+            %newAIV, SuppIV, (%PIV%+1)
+   ),
+   Out( snenc(<'gtk_m2', S(ctr)>, ~ptk, SuppIV, N(%PIV)) )
+   ]
+
+  // loop breaker: [0]
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Supp_Rcv_Gtk_Again:
+   [
+   SuppGTK( 'GTK_NEGOTIATING', ~suppID, ~authID, ~tid, ~ptk,
+            <gtk, gtk1, gtk2, ~wnm1, ~wnm2, kid>, ctr, ~loop, AuthIV, %AIV,
+            SuppIV, %PIV
+   ),
+   In( snenc(<'gtk_m1', gKey, S(ctr)>, ~ptk, newAuthIV, N(%newAIV)) )
+   ]
+  --[
+  Supp_Install_GTK_Again( ~suppID, ~authID, ~tid, S(ctr), ~loop, gKey
+  ),
+  Neq( gKey, gtk1 ), Neq( gKey, gtk2 )
+  ]->
+   [
+   SuppGTK( 'Wait_GTKData', ~suppID, ~authID, ~tid, ~ptk,
+            <gKey, gtk1, gtk2, ~wnm1, ~wnm2, kid>, S(ctr), ~loop, newAuthIV,
+            %newAIV, SuppIV, (%PIV%+1)
+   ),
+   Out( snenc(<'gtk_m2', S(ctr)>, ~ptk, SuppIV, N(%PIV)) )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Supp_Rcv_Gtk_Command:
+   [
+   SuppGTK( 'Wait_GTKData', ~suppID, ~authID, ~tid, ~ptk,
+            <gtk, gtk1, gtk2, ~wnm1, ~wnm2, kid>, S(ctr), ~loop, AuthIV, %AIV,
+            SuppIV, %PIV
+   ),
+   In( snenc(<'gtk_data', GtkData>, gtk, '0', N(1)) )
+   ]
+  --[
+  Supp_Rcv_Command( ~suppID, ~authID, ~tid, S(ctr), ~loop, gtk, '0',
+                    N(1), GtkData
+  )
+  ]->
+   [
+   SuppGTK( 'Done_GTK', ~suppID, ~authID, ~tid, ~ptk,
+            <gtk, gtk1, gtk2, ~wnm1, ~wnm2, kid>, S(ctr), ~loop, AuthIV, %AIV,
+            SuppIV, %PIV
+   )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Auth_Rcv_GtkM2:
+   [
+   AuthGTK( 'GTK_NEGOTIATING', ~authID, ~suppID, ~tid, ~ptk, gtk,
+            S(ctr), ~loop, SuppIV, %PIV, AuthIV, %AIV
+   ),
+   In( snenc(<'gtk_m2', newctr>, ~ptk, newSuppIV, N(%newPIV)) ),
+   Fr( ~GtkData )
+   ]
+  --[
+  Auth_Snd_Command( ~authID, ~suppID, ~tid, S(ctr), ~loop, gtk,
+                    ~GtkData
+  )
+  ]->
+   [
+   AuthGTK( 'Done_GTK', ~authID, ~suppID, ~tid, ~ptk, gtk, S(ctr),
+            ~loop, newSuppIV, %newPIV, AuthIV, %AIV
+   ),
+   Out( snenc(<'gtk_data', ~GtkData>, gtk, '0', N(1)) )
+   ]
+
+  // loop breaker: [0]
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Auth_Supp_Gtk_ReInit:
+   [
+   SuppGTK( 'Done_GTK', ~suppID, ~authID, ~tid, ~ptk,
+            <gtk, gtk1, gtk2, ~wnm1, ~wnm2, kid>, ctr1, ~loop, newAuthIV,
+            %newAIV, SuppIV, %PIV
+   ),
+   AuthGTK( 'Done_GTK', ~authID, ~suppID, ~tid, ~ptk, gtk, ctr2,
+            ~loop, newSuppIV, %newPIV, AuthIV, %AIV
+   ),
+   !GTK_Shared_Data( 'INIT', ~suppID, ~authID, ~tid, ~ptk, Old_Keys,
+                     ~oldpoint
+   ),
+   Fr( ~newloop ), Fr( ~ctr ), Fr( ~newpoint )
+   ]
+  --[
+  Auth_Supp_GTKReinit( ~authID, ~suppID, ~tid, ~loop, gtk ),
+  Free( ~oldpoint )
+  ]->
+   [
+   AuthGTK( 'INIT_GTK', ~authID, ~suppID, ~tid, ~ptk, gtk, S(~ctr),
+            ~newloop, newSuppIV, %newPIV, AuthIV, %AIV
+   ),
+   SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk,
+            <gtk, gtk1, gtk2, ~wnm1, ~wnm2, kid>, S(~ctr), ~newloop, newAuthIV,
+            %newAIV, SuppIV, %PIV
+   ),
+   !GTK_Shared_Data( 'GTK', ~suppID, ~authID, ~tid, ~ptk,
+                     <gtk, gtk1, gtk2, ~wnm1, ~wnm2, kid>, ~newpoint
+   )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+lemma Association_created [reuse]:
+  all-traces
+  "∀ authID suppID tid PMK #i.
+    (Associate( authID, suppID, tid, PMK ) @ #i) ⇒
+    ((∃ #j. (#j < #i) ∧ (Auth_Creat( authID ) @ #j)) ∧
+     (∃ #k. (#k < #i) ∧ (Supp_Creat( suppID ) @ #k)))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ authID suppID tid PMK #i.
+  (Associate( authID, suppID, tid, PMK ) @ #i)
+ ∧
+  ((∀ #j. (Auth_Creat( authID ) @ #j) ⇒ ¬(#j < #i)) ∨
+   (∀ #k. (Supp_Creat( suppID ) @ #k) ⇒ ¬(#k < #i)))"
+*/
+simplify
+solve( (∀ #j. (Auth_Creat( ~authID ) @ #j) ⇒ ¬(#j < #i))  ∥
+       (∀ #k. (Supp_Creat( ~suppID ) @ #k) ⇒ ¬(#k < #i)) )
+  case case_1
+  solve( !PMKey( ~PMK, ~authID, ~suppID, 'NULL' ) ▶₀ #i )
+    case Auth_Supp_PMK_TID
+    by contradiction /* from formulas */
+  qed
+next
+  case case_2
+  solve( !PMKey( ~PMK, ~authID, ~suppID, 'NULL' ) ▶₀ #i )
+    case Auth_Supp_PMK_TID
+    by contradiction /* from formulas */
+  qed
+qed
+
+lemma Association_is_unique [reuse, use_induction, heuristic=C]:
+  all-traces
+  "∀ authID1 authID2 tID suppID1 suppID2 PMK1 PMK2 #i #j.
+    ((Associate( authID1, suppID1, tID, PMK1 ) @ #i) ∧
+     (Associate( authID2, suppID2, tID, PMK2 ) @ #j)) ⇒
+    (#i = #j)"
+/*
+guarded formula characterizing all counter-examples:
+"∃ authID1 authID2 tID suppID1 suppID2 PMK1 PMK2 #i #j.
+  (Associate( authID1, suppID1, tID, PMK1 ) @ #i) ∧
+  (Associate( authID2, suppID2, tID, PMK2 ) @ #j)
+ ∧
+  ¬(#i = #j)"
+*/
+induction
+  case empty_trace
+  by contradiction /* from formulas */
+next
+  case non_empty_trace
+  simplify
+  by contradiction /* from formulas */
+qed
+
+lemma Auth_Snd_GTK_Entry [reuse, use_induction, heuristic=S]:
+  all-traces
+  "∀ suppID authID tid ctr loop gtk #i.
+    (Auth_Snd_GTK_Again( authID, suppID, tid, ctr, loop, gtk ) @ #i) ⇒
+    (∃ ctr1 #j.
+      (Auth_Snd_GTK( authID, suppID, tid, ctr1, loop, gtk ) @ #j) ∧
+      (#j < #i))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ suppID authID tid ctr loop gtk #i.
+  (Auth_Snd_GTK_Again( authID, suppID, tid, ctr, loop, gtk ) @ #i)
+ ∧
+  ∀ ctr1 #j.
+   (Auth_Snd_GTK( authID, suppID, tid, ctr1, loop, gtk ) @ #j)
+  ⇒
+   ¬(#j < #i)"
+*/
+induction
+  case empty_trace
+  by contradiction /* from formulas */
+next
+  case non_empty_trace
+  simplify
+  solve( (last(#i))  ∥
+         (∃ ctr1 #j.
+           (Auth_Snd_GTK( ~authID, ~suppID, ~tid, ctr1, ~loop, gtk ) @ #j)
+          ∧
+           (¬(last(#j))) ∧ (#j < #i)) )
+    case case_1
+    solve( AuthGTK( 'GTK_NEGOTIATING', ~authID, ~suppID, ~tid, ~ptk,
+                    gtk, ctr, ~loop, SuppIV, %PIV, AuthIV, %AIV
+           ) ▶₀ #i )
+      case Auth_Snd_Gtk_Repeat
+      by contradiction /* from formulas */
+    next
+      case Auth_Snd_Gtk_case_1
+      by contradiction /* from formulas */
+    next
+      case Auth_Snd_Gtk_case_2
+      by contradiction /* from formulas */
+    next
+      case Auth_Snd_Gtk_case_3
+      by contradiction /* from formulas */
+    next
+      case Auth_Snd_Gtk_case_4
+      by contradiction /* from formulas */
+    next
+      case Auth_Snd_Gtk_case_5
+      by contradiction /* from formulas */
+    qed
+  next
+    case case_2
+    by contradiction /* from formulas */
+  qed
+qed
+
+lemma Auth_Snd_GTK_unique [reuse, use_induction, heuristic=S]:
+  all-traces
+  "∀ suppID authID tid ctr ctr1 loop gtk #i #j.
+    ((Auth_Snd_GTK( authID, suppID, tid, ctr, loop, gtk ) @ #i) ∧
+     (Auth_Snd_GTK( authID, suppID, tid, ctr1, loop, gtk ) @ #j)) ⇒
+    (#i = #j)"
+/*
+guarded formula characterizing all counter-examples:
+"∃ suppID authID tid ctr ctr1 loop gtk #i #j.
+  (Auth_Snd_GTK( authID, suppID, tid, ctr, loop, gtk ) @ #i) ∧
+  (Auth_Snd_GTK( authID, suppID, tid, ctr1, loop, gtk ) @ #j)
+ ∧
+  ¬(#i = #j)"
+*/
+induction
+  case empty_trace
+  by contradiction /* from formulas */
+next
+  case non_empty_trace
+  simplify
+  by contradiction /* from formulas */
+qed
+
+lemma gtk_rekeys_attack [use_induction, heuristic=S]:
+  all-traces
+  "∀ suppID authID tid ctr1 ctr2 gtk IVnonce IVnat GtkData1 GtkData2
+     loop #i #j.
+    (((#i < #j) ∧
+      (Supp_Rcv_Command( suppID, authID, tid, ctr1, loop, gtk, IVnonce,
+                         IVnat, GtkData1
+       ) @ #i)) ∧
+     (Supp_Rcv_Command( suppID, authID, tid, ctr2, loop, gtk, IVnonce,
+                        IVnat, GtkData2
+      ) @ #j)) ⇒
+    (¬(GtkData1 = GtkData2))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ suppID authID tid ctr1 ctr2 gtk IVnonce IVnat GtkData1 GtkData2
+   loop #i #j.
+  (Supp_Rcv_Command( suppID, authID, tid, ctr1, loop, gtk, IVnonce,
+                     IVnat, GtkData1
+   ) @ #i) ∧
+  (Supp_Rcv_Command( suppID, authID, tid, ctr2, loop, gtk, IVnonce,
+                     IVnat, GtkData2
+   ) @ #j)
+ ∧
+  (#i < #j) ∧ (GtkData1 = GtkData2)"
+*/
+induction
+  case empty_trace
+  by contradiction /* from formulas */
+next
+  case non_empty_trace
+  simplify
+  solve( SuppGTK( 'Wait_GTKData', ~suppID, ~authID, ~tid, ~ptk,
+                  <gtk, gtk1, gtk2, ~wnm1, ~wnm2, kid>, S(ctr), ~loop, AuthIV, %AIV,
+                  SuppIV, %PIV
+         ) ▶₀ #i )
+    case Supp_Rcv_Gtk_1
+    solve( SuppGTK( 'Wait_GTKData', ~suppID, ~authID, ~tid, ~ptk.1,
+                    <gtk, gtk1, gtk2.1, ~wnm1.1, ~wnm2.1, kid>, S(ctr.1), ~loop,
+                    AuthIV.1, %AIV.1, SuppIV.1, %PIV.1
+           ) ▶₀ #j )
+      case Supp_Rcv_Gtk_1
+      solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk,
+                      <gtk.1, gtk1, gtk2, ~wnm1, ~wnm2, '1'>, ctr, ~loop, AuthIV.2,
+                      %AIV.2, SuppIV, %PIV
+             ) ▶₀ #vr )
+        case Auth_Associate_With_Supp
+        solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk.1,
+                        <gtk.2, gtk1.1, gtk2.1, ~wnm1.1, ~wnm2.1, '1'>, ctr, ~loop,
+                        AuthIV.3, %AIV.2, SuppIV.1, %PIV
+               ) ▶₀ #vr.1 )
+          case Auth_Associate_With_Supp
+          by contradiction /* cyclic */
+        qed
+      next
+        case Auth_Supp_Gtk_ReInit_case_1
+        solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk.1,
+                        <gtk.1, gtk1.1, gtk2.1, ~wnm1.1, ~wnm2.1, '1'>, ctr.1, ~loop,
+                        AuthIV.3, %AIV.3, SuppIV.1, %PIV.1
+               ) ▶₀ #vr.1 )
+          case Auth_Supp_Gtk_ReInit
+          by contradiction /* cyclic */
+        qed
+      next
+        case Auth_Supp_Gtk_ReInit_case_2
+        solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk.1,
+                        <gtk.2, gtk1.1, gtk2.1, ~wnm1.1, ~wnm2.1, '1'>, ctr.1, ~loop,
+                        AuthIV.3, %AIV.3, SuppIV.1, %PIV.1
+               ) ▶₀ #vr.1 )
+          case Auth_Supp_Gtk_ReInit
+          by contradiction /* cyclic */
+        qed
+      qed
+    next
+      case Supp_Rcv_Gtk_2
+      solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk,
+                      <gtk.1, gtk1.1, gtk2, ~wnm1, ~wnm2, '1'>, ctr, ~loop, AuthIV.2,
+                      %AIV.2, SuppIV, %PIV
+             ) ▶₀ #vr )
+        case Auth_Associate_With_Supp
+        by solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk.1,
+                           <gtk.2, gtk1, gtk2.1, ~wnm1.1, ~wnm2.1, '2'>, ctr, ~loop, AuthIV.3,
+                           %AIV.2, SuppIV.1, %PIV
+                  ) ▶₀ #vr.1 )
+      next
+        case Auth_Supp_Gtk_ReInit_case_1
+        by solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk.1,
+                           <gtk.1, gtk1, gtk2.1, ~wnm1.1, ~wnm2.1, '2'>, ctr.1, ~loop,
+                           AuthIV.3, %AIV.3, SuppIV.1, %PIV.1
+                  ) ▶₀ #vr.1 )
+      next
+        case Auth_Supp_Gtk_ReInit_case_2
+        by solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk.1,
+                           <gtk.2, gtk1, gtk2.1, ~wnm1.1, ~wnm2.1, '2'>, ctr.1, ~loop,
+                           AuthIV.3, %AIV.3, SuppIV.1, %PIV.1
+                  ) ▶₀ #vr.1 )
+      qed
+    next
+      case Supp_Rcv_Gtk_Again_case_1
+      solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk,
+                      <gtk.1, gtk1.1, gtk2, ~wnm1, ~wnm2, '1'>, ctr, ~loop, AuthIV.2,
+                      %AIV.2, SuppIV, %PIV
+             ) ▶₀ #vr )
+        case Auth_Associate_With_Supp
+        solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk.1,
+                        <gtk.2, gtk1.2, gtk2.1, ~wnm1.1, ~wnm2.1, '1'>, ctr, ~loop,
+                        AuthIV.4, %AIV.3, SuppIV.1, %PIV
+               ) ▶₀ #vr.2 )
+          case Auth_Associate_With_Supp
+          by contradiction /* from formulas */
+        qed
+      next
+        case Auth_Supp_Gtk_ReInit_case_1
+        solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk.1,
+                        <gtk.1, gtk1.2, gtk2.1, ~wnm1.1, ~wnm2.1, '1'>, ctr.1, ~loop,
+                        AuthIV.4, %AIV.4, SuppIV.1, %PIV.1
+               ) ▶₀ #vr.2 )
+          case Auth_Supp_Gtk_ReInit
+          by contradiction /* from formulas */
+        qed
+      next
+        case Auth_Supp_Gtk_ReInit_case_2
+        solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk.1,
+                        <gtk.2, gtk1.2, gtk2.1, ~wnm1.1, ~wnm2.1, '1'>, ctr.1, ~loop,
+                        AuthIV.4, %AIV.4, SuppIV.1, %PIV.1
+               ) ▶₀ #vr.2 )
+          case Auth_Supp_Gtk_ReInit
+          by contradiction /* from formulas */
+        qed
+      qed
+    next
+      case Supp_Rcv_Gtk_Again_case_2
+      solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk,
+                      <gtk.1, gtk1.1, gtk2, ~wnm1, ~wnm2, '1'>, ctr, ~loop, AuthIV.2,
+                      %AIV.2, SuppIV, %PIV
+             ) ▶₀ #vr )
+        case Auth_Associate_With_Supp
+        by solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk.1,
+                           <gtk.2, gtk1, gtk2.2, ~wnm1.1, ~wnm2.1, '2'>, ctr, ~loop, AuthIV.4,
+                           %AIV.3, SuppIV.1, %PIV
+                  ) ▶₀ #vr.2 )
+      next
+        case Auth_Supp_Gtk_ReInit_case_1
+        by solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk.1,
+                           <gtk.1, gtk1, gtk2.2, ~wnm1.1, ~wnm2.1, '2'>, ctr.1, ~loop,
+                           AuthIV.4, %AIV.4, SuppIV.1, %PIV.1
+                  ) ▶₀ #vr.2 )
+      next
+        case Auth_Supp_Gtk_ReInit_case_2
+        by solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk.1,
+                           <gtk.2, gtk1, gtk2.2, ~wnm1.1, ~wnm2.1, '2'>, ctr.1, ~loop,
+                           AuthIV.4, %AIV.4, SuppIV.1, %PIV.1
+                  ) ▶₀ #vr.2 )
+      qed
+    qed
+  next
+    case Supp_Rcv_Gtk_2
+    solve( SuppGTK( 'Wait_GTKData', ~suppID, ~authID, ~tid, ~ptk.1,
+                    <gtk, gtk1.1, gtk2, ~wnm1.1, ~wnm2.1, kid>, S(ctr.1), ~loop,
+                    AuthIV.1, %AIV.1, SuppIV.1, %PIV.1
+           ) ▶₀ #j )
+      case Supp_Rcv_Gtk_1
+      solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk,
+                      <gtk.1, gtk1, gtk2.1, ~wnm1, ~wnm2, '2'>, ctr, ~loop, AuthIV.2,
+                      %AIV.2, SuppIV, %PIV
+             ) ▶₀ #vr )
+        case Auth_Supp_Gtk_ReInit_case_1
+        by solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk.1,
+                           <gtk.1, gtk1.1, gtk2, ~wnm1.1, ~wnm2.1, '1'>, ctr.1, ~loop,
+                           AuthIV.3, %AIV.3, SuppIV.1, %PIV.1
+                  ) ▶₀ #vr.1 )
+      next
+        case Auth_Supp_Gtk_ReInit_case_2
+        by solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk.1,
+                           <gtk.2, gtk1.1, gtk2, ~wnm1.1, ~wnm2.1, '1'>, ctr.1, ~loop,
+                           AuthIV.3, %AIV.3, SuppIV.1, %PIV.1
+                  ) ▶₀ #vr.1 )
+      qed
+    next
+      case Supp_Rcv_Gtk_2
+      solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk,
+                      <gtk.1, gtk1, gtk2, ~wnm1, ~wnm2, '2'>, ctr, ~loop, AuthIV.2,
+                      %AIV.2, SuppIV, %PIV
+             ) ▶₀ #vr )
+        case Auth_Supp_Gtk_ReInit_case_1
+        solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk.1,
+                        <gtk.1, gtk1.1, gtk2.1, ~wnm1.1, ~wnm2.1, '2'>, ctr.1, ~loop,
+                        AuthIV.3, %AIV.3, SuppIV.1, %PIV.1
+               ) ▶₀ #vr.1 )
+          case Auth_Supp_Gtk_ReInit
+          by contradiction /* cyclic */
+        qed
+      next
+        case Auth_Supp_Gtk_ReInit_case_2
+        solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk.1,
+                        <gtk.2, gtk1.1, gtk2.1, ~wnm1.1, ~wnm2.1, '2'>, ctr.1, ~loop,
+                        AuthIV.3, %AIV.3, SuppIV.1, %PIV.1
+               ) ▶₀ #vr.1 )
+          case Auth_Supp_Gtk_ReInit
+          by contradiction /* cyclic */
+        qed
+      qed
+    next
+      case Supp_Rcv_Gtk_Again_case_1
+      solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk,
+                      <gtk.1, gtk1, gtk2.1, ~wnm1, ~wnm2, '2'>, ctr, ~loop, AuthIV.2,
+                      %AIV.2, SuppIV, %PIV
+             ) ▶₀ #vr )
+        case Auth_Supp_Gtk_ReInit_case_1
+        by solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk.1,
+                           <gtk.1, gtk1.2, gtk2, ~wnm1.1, ~wnm2.1, '1'>, ctr.1, ~loop,
+                           AuthIV.4, %AIV.4, SuppIV.1, %PIV.1
+                  ) ▶₀ #vr.2 )
+      next
+        case Auth_Supp_Gtk_ReInit_case_2
+        by solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk.1,
+                           <gtk.2, gtk1.2, gtk2, ~wnm1.1, ~wnm2.1, '1'>, ctr.1, ~loop,
+                           AuthIV.4, %AIV.4, SuppIV.1, %PIV.1
+                  ) ▶₀ #vr.2 )
+      qed
+    next
+      case Supp_Rcv_Gtk_Again_case_2
+      solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk,
+                      <gtk.1, gtk1, gtk2.1, ~wnm1, ~wnm2, '2'>, ctr, ~loop, AuthIV.2,
+                      %AIV.2, SuppIV, %PIV
+             ) ▶₀ #vr )
+        case Auth_Supp_Gtk_ReInit_case_1
+        solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk.1,
+                        <gtk.1, gtk1.1, gtk2.2, ~wnm1.1, ~wnm2.1, '2'>, ctr.1, ~loop,
+                        AuthIV.4, %AIV.4, SuppIV.1, %PIV.1
+               ) ▶₀ #vr.2 )
+          case Auth_Supp_Gtk_ReInit
+          by contradiction /* from formulas */
+        qed
+      next
+        case Auth_Supp_Gtk_ReInit_case_2
+        solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk.1,
+                        <gtk.2, gtk1.1, gtk2.2, ~wnm1.1, ~wnm2.1, '2'>, ctr.1, ~loop,
+                        AuthIV.4, %AIV.4, SuppIV.1, %PIV.1
+               ) ▶₀ #vr.2 )
+          case Auth_Supp_Gtk_ReInit
+          by contradiction /* from formulas */
+        qed
+      qed
+    qed
+  next
+    case Supp_Rcv_Gtk_Again_case_1
+    solve( SuppGTK( 'Wait_GTKData', ~suppID, ~authID, ~tid, ~ptk.1,
+                    <gtk, gtk1.1, gtk2.1, ~wnm1.1, ~wnm2.1, kid>, S(ctr.1), ~loop,
+                    AuthIV.1, %AIV.1, SuppIV.1, %PIV.1
+           ) ▶₀ #j )
+      case Supp_Rcv_Gtk_1
+      solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk,
+                      <gtk.1, gtk1.1, gtk2, ~wnm1, ~wnm2, '1'>, ctr, ~loop, AuthIV.3,
+                      %AIV.3, SuppIV, %PIV
+             ) ▶₀ #vr.1 )
+        case Auth_Associate_With_Supp
+        solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk.1,
+                        <gtk.2, gtk1.2, gtk2.1, ~wnm1.1, ~wnm2.1, '1'>, ctr, ~loop,
+                        AuthIV.4, %AIV.3, SuppIV.1, %PIV
+               ) ▶₀ #vr.2 )
+          case Auth_Associate_With_Supp
+          by contradiction /* from formulas */
+        qed
+      next
+        case Auth_Supp_Gtk_ReInit_case_1
+        solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk.1,
+                        <gtk.1, gtk1.2, gtk2.1, ~wnm1.1, ~wnm2.1, '1'>, ctr.1, ~loop,
+                        AuthIV.4, %AIV.4, SuppIV.1, %PIV.1
+               ) ▶₀ #vr.2 )
+          case Auth_Supp_Gtk_ReInit
+          by contradiction /* from formulas */
+        qed
+      next
+        case Auth_Supp_Gtk_ReInit_case_2
+        solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk.1,
+                        <gtk.2, gtk1.2, gtk2.1, ~wnm1.1, ~wnm2.1, '1'>, ctr.1, ~loop,
+                        AuthIV.4, %AIV.4, SuppIV.1, %PIV.1
+               ) ▶₀ #vr.2 )
+          case Auth_Supp_Gtk_ReInit
+          by contradiction /* from formulas */
+        qed
+      qed
+    next
+      case Supp_Rcv_Gtk_2
+      solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk,
+                      <gtk.1, gtk1.2, gtk2, ~wnm1, ~wnm2, '1'>, ctr, ~loop, AuthIV.3,
+                      %AIV.3, SuppIV, %PIV
+             ) ▶₀ #vr.1 )
+        case Auth_Associate_With_Supp
+        by solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk.1,
+                           <gtk.2, gtk1.1, gtk2.1, ~wnm1.1, ~wnm2.1, '2'>, ctr, ~loop,
+                           AuthIV.4, %AIV.3, SuppIV.1, %PIV
+                  ) ▶₀ #vr.2 )
+      next
+        case Auth_Supp_Gtk_ReInit_case_1
+        by solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk.1,
+                           <gtk.1, gtk1.1, gtk2.1, ~wnm1.1, ~wnm2.1, '2'>, ctr.1, ~loop,
+                           AuthIV.4, %AIV.4, SuppIV.1, %PIV.1
+                  ) ▶₀ #vr.2 )
+      next
+        case Auth_Supp_Gtk_ReInit_case_2
+        by solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk.1,
+                           <gtk.2, gtk1.1, gtk2.1, ~wnm1.1, ~wnm2.1, '2'>, ctr.1, ~loop,
+                           AuthIV.4, %AIV.4, SuppIV.1, %PIV.1
+                  ) ▶₀ #vr.2 )
+      qed
+    next
+      case Supp_Rcv_Gtk_Again_case_1
+      solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk,
+                      <gtk.1, gtk1.2, gtk2, ~wnm1, ~wnm2, '1'>, ctr, ~loop, AuthIV.3,
+                      %AIV.3, SuppIV, %PIV
+             ) ▶₀ #vr.1 )
+        case Auth_Associate_With_Supp
+        solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk.1,
+                        <gtk.2, gtk1.3, gtk2.1, ~wnm1.1, ~wnm2.1, '1'>, ctr, ~loop,
+                        AuthIV.5, %AIV.4, SuppIV.1, %PIV
+               ) ▶₀ #vr.3 )
+          case Auth_Associate_With_Supp
+          by contradiction /* cyclic */
+        qed
+      next
+        case Auth_Supp_Gtk_ReInit_case_1
+        solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk.1,
+                        <gtk.1, gtk1.3, gtk2.1, ~wnm1.1, ~wnm2.1, '1'>, ctr.1, ~loop,
+                        AuthIV.5, %AIV.5, SuppIV.1, %PIV.1
+               ) ▶₀ #vr.3 )
+          case Auth_Supp_Gtk_ReInit
+          by contradiction /* cyclic */
+        qed
+      next
+        case Auth_Supp_Gtk_ReInit_case_2
+        solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk.1,
+                        <gtk.2, gtk1.3, gtk2.1, ~wnm1.1, ~wnm2.1, '1'>, ctr.1, ~loop,
+                        AuthIV.5, %AIV.5, SuppIV.1, %PIV.1
+               ) ▶₀ #vr.3 )
+          case Auth_Supp_Gtk_ReInit
+          by contradiction /* cyclic */
+        qed
+      qed
+    next
+      case Supp_Rcv_Gtk_Again_case_2
+      solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk,
+                      <gtk.1, gtk1.2, gtk2, ~wnm1, ~wnm2, '1'>, ctr, ~loop, AuthIV.3,
+                      %AIV.3, SuppIV, %PIV
+             ) ▶₀ #vr.1 )
+        case Auth_Associate_With_Supp
+        by solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk.1,
+                           <gtk.2, gtk1.1, gtk2.2, ~wnm1.1, ~wnm2.1, '2'>, ctr, ~loop,
+                           AuthIV.5, %AIV.4, SuppIV.1, %PIV
+                  ) ▶₀ #vr.3 )
+      next
+        case Auth_Supp_Gtk_ReInit_case_1
+        by solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk.1,
+                           <gtk.1, gtk1.1, gtk2.2, ~wnm1.1, ~wnm2.1, '2'>, ctr.1, ~loop,
+                           AuthIV.5, %AIV.5, SuppIV.1, %PIV.1
+                  ) ▶₀ #vr.3 )
+      next
+        case Auth_Supp_Gtk_ReInit_case_2
+        by solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk.1,
+                           <gtk.2, gtk1.1, gtk2.2, ~wnm1.1, ~wnm2.1, '2'>, ctr.1, ~loop,
+                           AuthIV.5, %AIV.5, SuppIV.1, %PIV.1
+                  ) ▶₀ #vr.3 )
+      qed
+    qed
+  next
+    case Supp_Rcv_Gtk_Again_case_2
+    solve( SuppGTK( 'Wait_GTKData', ~suppID, ~authID, ~tid, ~ptk.1,
+                    <gtk, gtk1.1, gtk2.1, ~wnm1.1, ~wnm2.1, kid>, S(ctr.1), ~loop,
+                    AuthIV.1, %AIV.1, SuppIV.1, %PIV.1
+           ) ▶₀ #j )
+      case Supp_Rcv_Gtk_1
+      solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk,
+                      <gtk.1, gtk1, gtk2.2, ~wnm1, ~wnm2, '2'>, ctr, ~loop, AuthIV.3,
+                      %AIV.3, SuppIV, %PIV
+             ) ▶₀ #vr.1 )
+        case Auth_Supp_Gtk_ReInit_case_1
+        by solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk.1,
+                           <gtk.1, gtk1.1, gtk2.1, ~wnm1.1, ~wnm2.1, '1'>, ctr.1, ~loop,
+                           AuthIV.4, %AIV.4, SuppIV.1, %PIV.1
+                  ) ▶₀ #vr.2 )
+      next
+        case Auth_Supp_Gtk_ReInit_case_2
+        by solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk.1,
+                           <gtk.2, gtk1.1, gtk2.1, ~wnm1.1, ~wnm2.1, '1'>, ctr.1, ~loop,
+                           AuthIV.4, %AIV.4, SuppIV.1, %PIV.1
+                  ) ▶₀ #vr.2 )
+      qed
+    next
+      case Supp_Rcv_Gtk_2
+      solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk,
+                      <gtk.1, gtk1, gtk2.1, ~wnm1, ~wnm2, '2'>, ctr, ~loop, AuthIV.3,
+                      %AIV.3, SuppIV, %PIV
+             ) ▶₀ #vr.1 )
+        case Auth_Supp_Gtk_ReInit_case_1
+        solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk.1,
+                        <gtk.1, gtk1.1, gtk2.2, ~wnm1.1, ~wnm2.1, '2'>, ctr.1, ~loop,
+                        AuthIV.4, %AIV.4, SuppIV.1, %PIV.1
+               ) ▶₀ #vr.2 )
+          case Auth_Supp_Gtk_ReInit
+          by contradiction /* from formulas */
+        qed
+      next
+        case Auth_Supp_Gtk_ReInit_case_2
+        solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk.1,
+                        <gtk.2, gtk1.1, gtk2.2, ~wnm1.1, ~wnm2.1, '2'>, ctr.1, ~loop,
+                        AuthIV.4, %AIV.4, SuppIV.1, %PIV.1
+               ) ▶₀ #vr.2 )
+          case Auth_Supp_Gtk_ReInit
+          by contradiction /* from formulas */
+        qed
+      qed
+    next
+      case Supp_Rcv_Gtk_Again_case_1
+      solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk,
+                      <gtk.1, gtk1, gtk2.2, ~wnm1, ~wnm2, '2'>, ctr, ~loop, AuthIV.3,
+                      %AIV.3, SuppIV, %PIV
+             ) ▶₀ #vr.1 )
+        case Auth_Supp_Gtk_ReInit_case_1
+        by solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk.1,
+                           <gtk.1, gtk1.2, gtk2.1, ~wnm1.1, ~wnm2.1, '1'>, ctr.1, ~loop,
+                           AuthIV.5, %AIV.5, SuppIV.1, %PIV.1
+                  ) ▶₀ #vr.3 )
+      next
+        case Auth_Supp_Gtk_ReInit_case_2
+        by solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk.1,
+                           <gtk.2, gtk1.2, gtk2.1, ~wnm1.1, ~wnm2.1, '1'>, ctr.1, ~loop,
+                           AuthIV.5, %AIV.5, SuppIV.1, %PIV.1
+                  ) ▶₀ #vr.3 )
+      qed
+    next
+      case Supp_Rcv_Gtk_Again_case_2
+      solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk,
+                      <gtk.1, gtk1, gtk2.2, ~wnm1, ~wnm2, '2'>, ctr, ~loop, AuthIV.3,
+                      %AIV.3, SuppIV, %PIV
+             ) ▶₀ #vr.1 )
+        case Auth_Supp_Gtk_ReInit_case_1
+        solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk.1,
+                        <gtk.1, gtk1.1, gtk2.3, ~wnm1.1, ~wnm2.1, '2'>, ctr.1, ~loop,
+                        AuthIV.5, %AIV.5, SuppIV.1, %PIV.1
+               ) ▶₀ #vr.3 )
+          case Auth_Supp_Gtk_ReInit
+          by contradiction /* cyclic */
+        qed
+      next
+        case Auth_Supp_Gtk_ReInit_case_2
+        solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk.1,
+                        <gtk.2, gtk1.1, gtk2.3, ~wnm1.1, ~wnm2.1, '2'>, ctr.1, ~loop,
+                        AuthIV.5, %AIV.5, SuppIV.1, %PIV.1
+               ) ▶₀ #vr.3 )
+          case Auth_Supp_Gtk_ReInit
+          by contradiction /* cyclic */
+        qed
+      qed
+    qed
+  qed
+qed
+
+lemma Supp_GTK_Install_GTK_Key [use_induction, heuristic=S]:
+  exists-trace
+  "∃ suppID authID tid ctr1 ctr2 loop1 loop2 newk1 newk2 k1 k2 #i #j.
+    ((#i < #j) ∧
+     (Supp_Install_GTK( suppID, authID, tid, ctr1, loop1, k1, k2, newk1,
+                        k2
+      ) @ #i)) ∧
+    (Supp_Install_GTK( suppID, authID, tid, ctr2, loop2, newk1, k2,
+                       newk1, newk2
+     ) @ #j)"
+/*
+guarded formula characterizing all satisfying traces:
+"∃ suppID authID tid ctr1 ctr2 loop1 loop2 newk1 newk2 k1 k2 #i #j.
+  (Supp_Install_GTK( suppID, authID, tid, ctr1, loop1, k1, k2, newk1,
+                     k2
+   ) @ #i) ∧
+  (Supp_Install_GTK( suppID, authID, tid, ctr2, loop2, newk1, k2,
+                     newk1, newk2
+   ) @ #j)
+ ∧
+  #i < #j"
+*/
+induction
+  case non_empty_trace
+  simplify
+  solve( Supp_Install_GTK( suppID, authID, tid, ctr1, loop1, k1, k2,
+                           newk1, k2
+         ) @ #i )
+    case Supp_Rcv_Gtk_1
+    solve( Supp_Install_GTK( ~suppID, ~authID, ~tid, ctr2, loop2,
+                             newk1, k2, newk1, newk2
+           ) @ #j )
+      case Supp_Rcv_Gtk_2
+      solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk,
+                      <gtk, k1, k2, ~wnm1, ~wnm2, '1'>, ctr, ~loop, AuthIV, %AIV, SuppIV,
+                      %PIV
+             ) ▶₀ #i )
+        case Auth_Associate_With_Supp
+        solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk.1,
+                        <gtk.1, newk1, ~gtk2, ~wnm1.1, ~wnm2.1, '2'>, ctr, ~loop.1,
+                        AuthIV.1, %AIV, SuppIV.1, %PIV
+               ) ▶₀ #j )
+          case Auth_Supp_Gtk_ReInit_case_1
+          solve( AuthGTK( 'GTK_NEGOTIATING', ~authID, ~suppID, ~tid, ~ptk,
+                          newk1, S(ctr.2), ~loop.2, SuppIV.2, %PIV.1, AuthIV.2, %AIV.1
+                 ) ▶₀ #vr.6 )
+            case Auth_Snd_Gtk
+            solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk,
+                            <gtk.1, gtk1.1, ~gtk2, ~wnm1.1, ~wnm2.1, '1'>, ctr.1, ~loop,
+                            AuthIV.2, %AIV.1, SuppIV.1, %PIV
+                   ) ▶₀ #vr.7 )
+              case Auth_Associate_With_Supp
+              solve( !KU( snenc(<'gtk_m1', ~gKey, S(~oldctr)>, ~ptk, newAuthIV,
+                                N(%AIV))
+                     ) @ #vk )
+                case Auth_Snd_Gtk
+                solve( !KU( snenc(<'gtk_m1', newk2, S(S(~ctr))>, ~ptk, newAuthIV,
+                                  N(%newAIV))
+                       ) @ #vk.1 )
+                  case Auth_Snd_Gtk
+                  solve( !KU( snenc(<'gtk_data', GtkData>, ~gKey, '0', N(1))
+                         ) @ #vk.2 )
+                    case Auth_Rcv_GtkM2
+                    solve( AuthGTK( 'GTK_NEGOTIATING', ~authID.1, ~suppID.1, ~tid.1,
+                                    ~ptk.1, ~gKey, S(ctr.1), ~loop.2, SuppIV.1, %PIV, AuthIV.1, %AIV
+                           ) ▶₀ #vr.9 )
+                      case Auth_Snd_Gtk
+                      solve( !KU( snenc(<'gtk_m2', newctr>, ~ptk, newSuppIV, N(%newPIV))
+                             ) @ #vk.3 )
+                        case Supp_Rcv_Gtk_1
+                        solve( SuppGTK( 'INIT_GTK', ~suppID.1, ~authID.1, ~tid.1, ~ptk,
+                                        <gtk.1, gtk1.1, gtk2.1, ~wnm1.1, ~wnm2.1, '1'>, ctr.1,
+                                        ~loop.2, AuthIV.1, %AIV, newSuppIV, %newPIV
+                               ) ▶₀ #vr.9 )
+                          case Auth_Associate_With_Supp
+                          SOLVED // trace found
+                        qed
+                      qed
+                    qed
+                  qed
+                qed
+              qed
+            qed
+          qed
+        qed
+      qed
+    qed
+  qed
+qed
+
+/* All well-formedness checks were successful. */
+
+end

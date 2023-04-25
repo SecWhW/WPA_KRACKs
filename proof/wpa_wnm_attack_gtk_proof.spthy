@@ -1,0 +1,595 @@
+theory wpa_wnm_attack_gtk begin
+
+// Function signature and definition of the equational theory E
+
+builtins: multiset, natural-numbers
+functions: KDF/1, MIC/2, N/1, S/1, fst/1, pair/2, sdec/2, senc/2,
+           snd/1, sndec/2, snenc/4
+equations:
+    fst(<x.1, x.2>) = x.1,
+    sdec(senc(x.1, x.2), x.2) = x.1,
+    snd(<x.1, x.2>) = x.2,
+    sndec(snenc(message, key, Nonce, IVnat), key) = message
+
+
+
+restriction Eq:
+  "∀ x y #i. (Eq( x, y ) @ #i) ⇒ (x = y)"
+  // safety formula
+
+restriction Neq:
+  "∀ x y #i. (Neq( x, y ) @ #i) ⇒ (¬(x = y))"
+  // safety formula
+
+restriction OnlyOneAssociate:
+  "∀ suppID authID PMK tid1 tid2 #i #j.
+    ((Associate( authID, suppID, tid1, PMK ) @ #i) ∧
+     (Associate( authID, suppID, tid2, PMK ) @ #j)) ⇒
+    ((#i = #j) ∧ (tid1 = tid2))"
+  // safety formula
+
+restriction OnlyOneSupp:
+  "∀ suppID1 suppID2 #i #j.
+    ((Supp_Creat( suppID1 ) @ #i) ∧ (Supp_Creat( suppID2 ) @ #j)) ⇒
+    ((#i = #j) ∧ (suppID1 = suppID2))"
+  // safety formula
+
+restriction OnlyOneAuth:
+  "∀ ID1 ID2 #i #j.
+    ((Auth_Creat( ID1 ) @ #i) ∧ (Auth_Creat( ID2 ) @ #j)) ⇒
+    ((#i = #j) ∧ (ID1 = ID2))"
+  // safety formula
+
+restriction OnlyOnePMK:
+  "∀ PMK1 PMK2 #i #j.
+    ((PMK_Gen( PMK1 ) @ #i) ∧ (PMK_Gen( PMK2 ) @ #j)) ⇒
+    ((#i = #j) ∧ (PMK1 = PMK2))"
+  // safety formula
+
+restriction MemoryCanBeFreedOnlyOnce:
+  "∀ pointer #i #j.
+    ((Free( pointer ) @ #i) ∧ (Free( pointer ) @ #j)) ⇒ (#i = #j)"
+  // safety formula
+
+rule (modulo E) Supp_Create:
+   [ Fr( ~suppID ) ]
+  --[ Supp_Creat( ~suppID ) ]->
+   [ !Supp( ~suppID ), Out( ~suppID ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Auth_Create:
+   [ Fr( ~authID ), Fr( ~x ) ]
+  --[ Auth_Creat( ~authID ) ]->
+   [ !Auth( ~authID ), Out( ~authID ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Auth_Supp_PMK_TID:
+   [ Fr( ~PMK ), !Auth( ~authID ), !Supp( ~suppID ) ]
+  --[ PMK_Gen( ~PMK ) ]->
+   [ !PMKey( ~PMK, ~authID, ~suppID, 'NULL' ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Auth_Associate_With_Supp:
+   [
+   !PMKey( ~PMK, ~authID, ~suppID, 'NULL' ), Fr( ~tid ), Fr( ~gtk1 ),
+   Fr( ~gtk2 ), Fr( ~wnm1 ), Fr( ~wnm2 ), Fr( ~gtkctr ), Fr( ~ptk ),
+   Fr( ~oldctr ), Fr( ~AuthIV ), Fr( ~SuppIV ), Fr( ~point ),
+   Fr( ~point1 ), Fr( ~Loop ), Fr( ~Loop1 )
+   ]
+  --[ Associate( ~authID, ~suppID, ~tid, ~PMK ) ]->
+   [
+   AuthGTK( 'INIT_GTK', ~authID, ~suppID, ~tid, ~ptk, ~oldctr, ~Loop,
+            ~SuppIV, 1, ~AuthIV, 1
+   ),
+   SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk, ~oldctr, ~Loop,
+            ~AuthIV, 1, ~SuppIV, 1
+   ),
+   AuthWNM( 'INIT_WNM', ~authID, ~suppID, ~tid, ~ptk, ~oldctr, ~Loop1,
+            ~SuppIV, 1, ~AuthIV, 1
+   ),
+   SuppWNM( 'INIT_WNM', ~suppID, ~authID, ~tid, ~ptk, ~oldctr, ~Loop1,
+            ~AuthIV, 1, ~SuppIV, 1
+   ),
+   SuppCom( 'INIT_Command', ~suppID, ~authID, ~tid, ~ptk, ~gtk2,
+            ~gtkctr, 1
+   ),
+   !PMKey( ~PMK, ~authID, ~suppID, ~tid ),
+   !Auth_GTK_Data( 'INIT', ~suppID, ~authID, ~tid, ~ptk,
+                   <~gtk2, ~gtk1, ~gtk2, ~wnm1, ~wnm2, ~gtkctr, 1, '1'>, ~point1
+   ),
+   !Supp_GTK_Data( 'INIT', ~suppID, ~authID, ~tid, ~ptk,
+                   <~gtk2, ~gtk1, ~gtk2, ~wnm1, ~wnm2, ~gtkctr, 1, '1'>, ~point
+   )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) FasT_Auth_Supp_GTK_1:
+   [
+   AuthGTK( 'INIT_GTK', ~authID, ~suppID, ~tid, ~ptk, ~oldctr, ~Loop,
+            ~SuppIV, %SIV, ~AuthIV, %AIV
+   ),
+   SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk, ~oldctr, ~Loop,
+            ~AuthIV, %AIV, ~SuppIV, %SIV
+   ),
+   !Auth_GTK_Data( 'INIT', ~suppID, ~authID, ~tid, ~ptk,
+                   <gtk2, gtk1, gtk2, wnm1, wnm2, ~gctr, %gIV, '1'>, ~oldpoint
+   ),
+   !Supp_GTK_Data( 'INIT', ~suppID, ~authID, ~tid, ~ptk,
+                   <gtk2, gtk1, gtk2, wnm1, wnm2, ~gctr, %gIV, '1'>, ~oldpoint1
+   ),
+   Fr( ~newgKey1 ), Fr( ~newgKey2 ), Fr( ~newloop ), Fr( ~newctr ),
+   Fr( ~newpoint ), Fr( ~newpoint1 ), Fr( ~newSuppIV ),
+   Fr( ~newAuthIV )
+   ]
+  --[
+  Fast_Auth_Supp_Reinstalled_TwoGTKs_1( ~authID, ~suppID, ~tid, ~ptk,
+                                        gtk2,
+                                        <~newgKey2, ~newgKey1, ~newgKey2, wnm1, wnm2, ~gctr, %gIV, 
+                                         '1'>
+  ),
+  Free( ~oldpoint ), Free( ~oldpoint1 )
+  ]->
+   [
+   AuthGTK( 'INIT_GTK', ~authID, ~suppID, ~tid, ~ptk, ~newctr,
+            ~newloop, ~newSuppIV, 1, ~newAuthIV, 1
+   ),
+   SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk, ~newctr,
+            ~newloop, ~newAuthIV, 1, ~newSuppIV, 1
+   ),
+   !Auth_GTK_Data( 'INIT', ~suppID, ~authID, ~tid, ~ptk,
+                   <~newgKey2, ~newgKey1, ~newgKey2, wnm1, wnm2, ~gctr, %gIV, '1'>,
+                   ~newpoint
+   ),
+   !Supp_GTK_Data( 'INIT', ~suppID, ~authID, ~tid, ~ptk,
+                   <~newgKey2, ~newgKey1, ~newgKey2, wnm1, wnm2, ~gctr, %gIV, '1'>,
+                   ~newpoint1
+   )
+   ]
+
+  // loop breakers: [0,1,2,3]
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) FasT_Auth_Supp_GTK_2:
+   [
+   AuthGTK( 'INIT_GTK', ~authID, ~suppID, ~tid, ~ptk, ~oldctr, ~Loop,
+            ~SuppIV, %SIV, ~AuthIV, %AIV
+   ),
+   SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk, ~oldctr, ~Loop,
+            ~AuthIV, %AIV, ~SuppIV, %SIV
+   ),
+   !Auth_GTK_Data( 'INIT', ~suppID, ~authID, ~tid, ~ptk,
+                   <gtk1, gtk1, gtk2, wnm1, wnm2, ~gctr, %gIV, '2'>, ~oldpoint
+   ),
+   !Supp_GTK_Data( 'INIT', ~suppID, ~authID, ~tid, ~ptk,
+                   <gtk1, gtk1, gtk2, wnm1, wnm2, ~gctr, %gIV, '2'>, ~oldpoint1
+   ),
+   Fr( ~newgKey1 ), Fr( ~newgKey2 ), Fr( ~newloop ), Fr( ~newctr ),
+   Fr( ~newpoint ), Fr( ~newpoint1 ), Fr( ~newSuppIV ),
+   Fr( ~newAuthIV )
+   ]
+  --[
+  Fast_Auth_Supp_Reinstalled_TwoGTKs_2( ~authID, ~suppID, ~tid, ~ptk,
+                                        gtk1,
+                                        <~newgKey1, ~newgKey1, ~newgKey2, wnm1, wnm2, ~gctr, %gIV, 
+                                         '2'>
+  ),
+  Free( ~oldpoint ), Free( ~oldpoint1 )
+  ]->
+   [
+   AuthGTK( 'INIT_GTK', ~authID, ~suppID, ~tid, ~ptk, ~newctr,
+            ~newloop, ~newSuppIV, 1, ~newAuthIV, 1
+   ),
+   SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk, ~newctr,
+            ~newloop, ~newAuthIV, 1, ~newSuppIV, 1
+   ),
+   !Auth_GTK_Data( 'INIT', ~suppID, ~authID, ~tid, ~ptk,
+                   <~newgKey1, ~newgKey1, ~newgKey2, wnm1, wnm2, ~gctr, %gIV, '2'>,
+                   ~newpoint
+   ),
+   !Supp_GTK_Data( 'INIT', ~suppID, ~authID, ~tid, ~ptk,
+                   <~newgKey1, ~newgKey1, ~newgKey2, wnm1, wnm2, ~gctr, %gIV, '2'>,
+                   ~newpoint1
+   )
+   ]
+
+  // loop breakers: [0,1,2,3]
+  /* has exactly the trivial AC variant */
+
+restriction GTK_Reinstalled_TwoGTK_1:
+  "∀ authID suppID tid ptk oldgtk newkeys oldgtk1 newkeys1 #i #j.
+    ((Fast_Auth_Supp_Reinstalled_TwoGTKs_1( authID, suppID, tid, ptk,
+                                            oldgtk, newkeys
+      ) @ #i) ∧
+     (Fast_Auth_Supp_Reinstalled_TwoGTKs_1( authID, suppID, tid, ptk,
+                                            oldgtk1, newkeys1
+      ) @ #j)) ⇒
+    (#j = #i)"
+  // safety formula
+
+restriction GTK_Reinstalled_TwoGTK_2:
+  "∀ authID suppID tid ptk oldgtk newkeys oldgtk1 newkeys1 #i #j.
+    ((Fast_Auth_Supp_Reinstalled_TwoGTKs_2( authID, suppID, tid, ptk,
+                                            oldgtk, newkeys
+      ) @ #i) ∧
+     (Fast_Auth_Supp_Reinstalled_TwoGTKs_2( authID, suppID, tid, ptk,
+                                            oldgtk1, newkeys1
+      ) @ #j)) ⇒
+    (#j = #i)"
+  // safety formula
+
+rule (modulo E) Supp_Snd_WNM_Request:
+   [
+   SuppWNM( 'INIT_WNM', ~suppID, ~authID, ~tid, ~ptk, ctr, ~loop,
+            AuthIV, %AIV, SuppIV, %PIV
+   )[+]
+   ]
+  --[ Supp_Snd_WNM( ~suppID, ~authID, ~tid, ~ptk, ~loop ) ]->
+   [
+   SuppWNM( 'Wait_GTK_WNM', ~suppID, ~authID, ~tid, ~ptk, ctr, ~loop,
+            AuthIV, %AIV, SuppIV, (%PIV%+1)
+   ),
+   Out( <snenc('Request_sleep_Accept_Exit', ~ptk, SuppIV, N(%PIV)), 
+         MIC(snenc('Request_sleep_Accept_Exit', ~ptk, SuppIV, N(%PIV)),
+             ~ptk)
+        >
+   )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Auth_Snd_WNM_LatestGtk_Command:
+   [
+   AuthWNM( 'INIT_WNM', ~authID, ~suppID, ~tid, ~ptk, ctr, ~loop,
+            SuppIV, %PIV, AuthIV, %AIV
+   ),
+   !Auth_GTK_Data( 'INIT', ~suppID, ~authID, ~tid, ~ptk,
+                   <gKey, gtk1, gtk2, wnm1, wnm2, gctr, %gIV, kid>, ~point
+   ),
+   In( <
+        snenc('Request_sleep_Accept_Exit', ~ptk, newSuppIV, N(%newPIV)), 
+        MIC(snenc('Request_sleep_Accept_Exit', ~ptk, newSuppIV,
+                  N(%newPIV)),
+            ~ptk)
+       >
+   ),
+   Fr( ~GtkData ), Fr( ~newpoint )
+   ]
+  --[
+  Auth_Snd_WNM_GTK( ~authID, ~suppID, ~tid, ~ptk, ~loop, gKey,
+                    ~GtkData
+  ),
+  Free( ~point )
+  ]->
+   [
+   AuthWNM( 'Done_WNM', ~authID, ~suppID, ~tid, ~ptk, ctr, ~loop,
+            newSuppIV, %newPIV, AuthIV, (%AIV%+1)
+   ),
+   !Auth_GTK_Data( 'INIT', ~suppID, ~authID, ~tid, ~ptk,
+                   <gKey, gtk1, gtk2, wnm1, wnm2, gctr, (%gIV%+1), kid>, ~newpoint
+   ),
+   Out( <
+         snenc(<'WNM_GTK', gKey, gctr, %gIV, kid>, ~ptk, AuthIV, N(%AIV)), 
+         MIC(snenc(<'WNM_GTK', gKey, gctr, %gIV, kid>, ~ptk, AuthIV,
+                   N(%AIV)),
+             ~ptk)
+        >
+   ),
+   Out( snenc(<'gtk_data', ~GtkData>, gKey, gctr, %gIV) )
+   ]
+
+  // loop breaker: [1]
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Supp_Install_WNM_Gtk:
+   [
+   SuppWNM( 'Wait_GTK_WNM', ~suppID, ~authID, ~tid, ~ptk, ctr, ~loop,
+            AuthIV, %AIV, SuppIV, n1
+   ),
+   In( <
+        snenc(<'WNM_GTK', gKey, gctr, %AuthgIV, kid>, ~ptk, newAuthIV,
+              N(%newAIV)), 
+        MIC(snenc(<'WNM_GTK', gKey, gctr, %AuthgIV, kid>, ~ptk, newAuthIV,
+                  N(%newAIV)),
+            ~ptk)
+       >
+   )
+   ]
+  --[
+  Supp_StartInstall_WNM( ~suppID, ~authID, ~tid, ~ptk, ~loop, gKey )
+  ]->
+   [
+   SuppWNM( 'Done_WNM', ~suppID, ~authID, ~tid, ~ptk, ctr, ~loop,
+            newAuthIV, %newAIV, SuppIV, n1
+   ),
+   SuppInstallKeys( 'Install_Keys', ~suppID, ~authID, ~tid, ~ptk,
+                    %AuthgIV, ~loop, gKey, kid
+   )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Supp_Install_WNM_Gtk_1:
+   [
+   SuppInstallKeys( 'Install_Keys', ~suppID, ~authID, ~tid, ~ptk,
+                    %AuthgIV, ~loop, gKey, '1'
+   ),
+   !Supp_GTK_Data( 'INIT', ~suppID, ~authID, ~tid, ~ptk,
+                   <gtk, gtk1, gtk2, wnm1, wnm2, gctr, %gIV, '1'>, ~point
+   ),
+   Fr( ~newpoint )
+   ]
+  --[
+  Supp_Install_WNM( ~suppID, ~authID, ~tid, ~ptk, ~loop, gKey ),
+  Free( ~point ), Neq( gKey, gtk1 ), Neq( gKey, gtk2 )
+  ]->
+   [
+   !Supp_GTK_Data( 'INIT', ~suppID, ~authID, ~tid, ~ptk,
+                   <gKey, gtk1, gKey, wnm1, wnm2, gctr, %AuthgIV, '1'>, ~newpoint
+   )
+   ]
+
+  // loop breaker: [1]
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Supp_Install_WNM_Gtk_2:
+   [
+   SuppInstallKeys( 'Install_Keys', ~suppID, ~authID, ~tid, ~ptk,
+                    %AuthgIV, ~loop, gKey, '2'
+   ),
+   !Supp_GTK_Data( 'INIT', ~suppID, ~authID, ~tid, ~ptk,
+                   <gtk, gtk1, gtk2, wnm1, wnm2, gctr, %gIV, '2'>, ~oldpoint
+   ),
+   Fr( ~newpoint )
+   ]
+  --[
+  Supp_Install_WNM( ~suppID, ~authID, ~tid, ~ptk, ~loop, gKey ),
+  Free( ~oldpoint ), Neq( gKey, gtk1 ), Neq( gKey, gtk2 )
+  ]->
+   [
+   !Supp_GTK_Data( 'INIT', ~suppID, ~authID, ~tid, ~ptk,
+                   <gKey, gKey, gtk2, wnm1, wnm2, gctr, %AuthgIV, '2'>, ~newpoint
+   )
+   ]
+
+  // loop breaker: [1]
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Auth_Supp_WNM_ReInit:
+   [
+   SuppWNM( 'Done_WNM', ~suppID, ~authID, ~tid, ~ptk, ctr1, ~loop,
+            newAuthIV, %newAIV, SuppIV, %PIV
+   ),
+   AuthWNM( 'Done_WNM', ~authID, ~suppID, ~tid, ~ptk, ctr2, ~loop,
+            newSuppIV, %newPIV, AuthIV, %AIV
+   ),
+   Fr( ~newloop ), Fr( ~newctr )
+   ]
+  --[ Auth_Supp_GTKReinit( ~authID, ~suppID, ~tid, ~loop, ~newloop )
+  ]->
+   [ ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Supp_Rcv_WNM_Command_Init:
+   [
+   SuppCom( 'INIT_Command', ~suppID, ~authID, ~tid, ~ptk, gtk,
+            oldgctr, %oldgIV
+   ),
+   In( snenc(<'gtk_data', ~GtkData>, gKey, gctr, %gIV) ),
+   !Supp_GTK_Data( 'INIT', ~suppID, ~authID, ~tid, ~ptk,
+                   <gtk, gtk1, gtk2, wnm1, wnm2, gctr, %gIV1, kid>, ~point
+   ),
+   Fr( ~newpoint )
+   ]
+  --[
+  Supp_Rcv_Command( ~suppID, ~authID, ~tid, ~ptk, gKey, ~GtkData ),
+  Eq( gKey, gtk ), Free( ~point )
+  ]->
+   [
+   SuppCom( 'Wait_GTK_Command', ~suppID, ~authID, ~tid, ~ptk, gtk,
+            gctr, (%gIV%+1)
+   ),
+   !Supp_GTK_Data( 'INIT', ~suppID, ~authID, ~tid, ~ptk,
+                   <gKey, gtk1, gtk2, wnm1, wnm2, gctr, (%gIV%+1), kid>, ~newpoint
+   )
+   ]
+
+  // loop breaker: [2]
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Supp_Rcv_WNM_Command_Repeat:
+   [
+   SuppCom( 'Wait_GTK_Command', ~suppID, ~authID, ~tid, ~ptk, gtk,
+            gctr, %oldgIV
+   ),
+   In( snenc(<'gtk_data', ~GtkData>, gKey, gctr, %gIV) ),
+   Fr( ~newpoint ),
+   !Supp_GTK_Data( 'INIT', ~suppID, ~authID, ~tid, ~ptk,
+                   <gKey, gtk1, gtk2, wnm1, wnm2, gctr, %gIV, kid>, ~point
+   )
+   ]
+  --[
+  Supp_Rcv_Command_Again( ~suppID, ~authID, ~tid, ~ptk, gKey,
+                          ~GtkData
+  ),
+  Eq( gKey, gtk ), Free( ~point )
+  ]->
+   [
+   !Supp_GTK_Data( 'INIT', ~suppID, ~authID, ~tid, ~ptk,
+                   <gKey, gtk1, gtk2, wnm1, wnm2, gctr, %gIV, kid>, ~newpoint
+   )
+   ]
+
+  // loop breaker: [3]
+  /* has exactly the trivial AC variant */
+
+lemma Association_created [reuse]:
+  all-traces
+  "∀ authID suppID tid PMK #i.
+    (Associate( authID, suppID, tid, PMK ) @ #i) ⇒
+    ((∃ #j. (#j < #i) ∧ (Auth_Creat( authID ) @ #j)) ∧
+     (∃ #k. (#k < #i) ∧ (Supp_Creat( suppID ) @ #k)))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ authID suppID tid PMK #i.
+  (Associate( authID, suppID, tid, PMK ) @ #i)
+ ∧
+  ((∀ #j. (Auth_Creat( authID ) @ #j) ⇒ ¬(#j < #i)) ∨
+   (∀ #k. (Supp_Creat( suppID ) @ #k) ⇒ ¬(#k < #i)))"
+*/
+simplify
+solve( (∀ #j. (Auth_Creat( ~authID ) @ #j) ⇒ ¬(#j < #i))  ∥
+       (∀ #k. (Supp_Creat( ~suppID ) @ #k) ⇒ ¬(#k < #i)) )
+  case case_1
+  solve( !PMKey( ~PMK, ~authID, ~suppID, 'NULL' ) ▶₀ #i )
+    case Auth_Supp_PMK_TID
+    by contradiction /* from formulas */
+  qed
+next
+  case case_2
+  solve( !PMKey( ~PMK, ~authID, ~suppID, 'NULL' ) ▶₀ #i )
+    case Auth_Supp_PMK_TID
+    by contradiction /* from formulas */
+  qed
+qed
+
+lemma Association_is_unique [reuse, use_induction, heuristic=C]:
+  all-traces
+  "∀ authID1 authID2 tID suppID1 suppID2 PMK1 PMK2 #i #j.
+    ((Associate( authID1, suppID1, tID, PMK1 ) @ #i) ∧
+     (Associate( authID2, suppID2, tID, PMK2 ) @ #j)) ⇒
+    (#i = #j)"
+/*
+guarded formula characterizing all counter-examples:
+"∃ authID1 authID2 tID suppID1 suppID2 PMK1 PMK2 #i #j.
+  (Associate( authID1, suppID1, tID, PMK1 ) @ #i) ∧
+  (Associate( authID2, suppID2, tID, PMK2 ) @ #j)
+ ∧
+  ¬(#i = #j)"
+*/
+induction
+  case empty_trace
+  by contradiction /* from formulas */
+next
+  case non_empty_trace
+  simplify
+  by contradiction /* from formulas */
+qed
+
+lemma gtk_rekeys_attack [use_induction, heuristic=S]:
+  exists-trace
+  "∃ suppID authID tid ptk gtk GtkData #i #j.
+    ((#i < #j) ∧
+     (Supp_Rcv_Command( suppID, authID, tid, ptk, gtk, GtkData
+      ) @ #i)) ∧
+    (Supp_Rcv_Command_Again( suppID, authID, tid, ptk, gtk, GtkData
+     ) @ #j)"
+/*
+guarded formula characterizing all satisfying traces:
+"∃ suppID authID tid ptk gtk GtkData #i #j.
+  (Supp_Rcv_Command( suppID, authID, tid, ptk, gtk, GtkData ) @ #i) ∧
+  (Supp_Rcv_Command_Again( suppID, authID, tid, ptk, gtk, GtkData
+   ) @ #j)
+ ∧
+  #i < #j"
+*/
+induction
+  case non_empty_trace
+  simplify
+  solve( SuppCom( 'INIT_Command', ~suppID, ~authID, ~tid, ~ptk, gtk,
+                  oldgctr, %oldgIV
+         ) ▶₀ #i )
+    case Auth_Associate_With_Supp
+    solve( SuppCom( 'Wait_GTK_Command', ~suppID, ~authID, ~tid, ~ptk,
+                    ~gtk2, gctr.1, %oldgIV
+           ) ▶₀ #j )
+      case Supp_Rcv_WNM_Command_Init
+      solve( !Supp_GTK_Data( 'INIT', ~suppID, ~authID, ~tid, ~ptk,
+                             <~gtk2, gtk1, gtk2.1, wnm1, wnm2, gctr, %gIV1, kid>, ~point
+             ) ▶₂ #i )
+        case Auth_Associate_With_Supp
+        solve( !Supp_GTK_Data( 'INIT', ~suppID, ~authID, ~tid, ~ptk,
+                               <~gtk2, gtk1.1, gtk2.1, wnm1.1, wnm2.1, ~gtkctr, %gIV.1, kid>,
+                               ~point.1
+               ) ▶₃ #j )
+          case Supp_Install_WNM_Gtk_1
+          solve( !Supp_GTK_Data( 'INIT', ~suppID, ~authID, ~tid, ~ptk,
+                                 <gtk, gtk1.1, gtk2.1, wnm1.1, wnm2.1, ~gtkctr, %gIV.2, '1'>,
+                                 ~point.2
+                 ) ▶₁ #vr.4 )
+            case FasT_Auth_Supp_GTK_1
+            solve( AuthGTK( 'INIT_GTK', ~authID, ~suppID, ~tid, ~ptk,
+                            ~oldctr.1, ~Loop.1, ~SuppIV.1, %SIV, ~AuthIV.1, %AIV
+                   ) ▶₀ #vr.7 )
+              case Auth_Associate_With_Supp
+              solve( SuppGTK( 'INIT_GTK', ~suppID, ~authID, ~tid, ~ptk, ~oldctr,
+                              ~Loop, ~AuthIV, 1, ~SuppIV, 1
+                     ) ▶₁ #vr.7 )
+                case Auth_Associate_With_Supp
+                solve( !Auth_GTK_Data( 'INIT', ~suppID, ~authID, ~tid, ~ptk,
+                                       <gtk2.1, gtk1.1, gtk2.1, wnm1.1, wnm2.1, ~gtkctr, %gIV.2, '1'
+                                       >,
+                                       ~oldpoint
+                       ) ▶₂ #vr.7 )
+                  case Auth_Snd_WNM_LatestGtk_Command
+                  solve( !Supp_GTK_Data( 'INIT', ~suppID, ~authID, ~tid, ~ptk,
+                                         <gtk2.1, gtk1.1, gtk2.1, wnm1.1, wnm2.1, ~gtkctr, 
+                                          (%gIV.2%+1), '1'>,
+                                         ~oldpoint1
+                         ) ▶₃ #vr.7 )
+                    case Supp_Rcv_WNM_Command_Init
+                    solve( !Auth_GTK_Data( 'INIT', ~suppID, ~authID, ~tid, ~ptk,
+                                           <~gtk2, ~gtk1, ~gtk2, ~wnm1, ~wnm2, ~gtkctr, %gIV, '1'>,
+                                           ~point.3
+                           ) ▶₁ #vr.8 )
+                      case Auth_Associate_With_Supp
+                      solve( !KU( snenc(<'gtk_data', ~GtkData>, ~gtk2, ~gtkctr, 1)
+                             ) @ #vk )
+                        case Auth_Snd_WNM_LatestGtk_Command_case_4
+                        solve( !KU( snenc(<'gtk_data', ~GtkData>, ~gtk2, ~gtkctr, %gIV)
+                               ) @ #vk.1 )
+                          case Auth_Snd_WNM_LatestGtk_Command_case_4
+                          solve( !KU( snenc(<'WNM_GTK', ~gtk2, gctr, 1, '1'>, ~ptk,
+                                            newAuthIV, N(%newAIV))
+                                 ) @ #vk.2 )
+                            case Auth_Snd_WNM_LatestGtk_Command_case_1
+                            solve( !KU( snenc('Request_sleep_Accept_Exit', ~ptk, newSuppIV.1,
+                                              N(%newPIV))
+                                   ) @ #vk.5 )
+                              case Supp_Snd_WNM_Request
+                              solve( !KU( MIC(snenc(<'WNM_GTK', ~gtk2, ~gtkctr, 1, '1'>, ~ptk,
+                                                    ~AuthIV, N(1)),
+                                              ~ptk)
+                                     ) @ #vk.4 )
+                                case Auth_Snd_WNM_LatestGtk_Command_case_4
+                                solve( !KU( MIC(snenc('Request_sleep_Accept_Exit', ~ptk, ~SuppIV,
+                                                      N(1)),
+                                                ~ptk)
+                                       ) @ #vk.6 )
+                                  case Supp_Snd_WNM_Request
+                                  SOLVED // trace found
+                                qed
+                              qed
+                            qed
+                          qed
+                        qed
+                      qed
+                    qed
+                  qed
+                qed
+              qed
+            qed
+          qed
+        qed
+      qed
+    qed
+  qed
+qed
+
+/* All well-formedness checks were successful. */
+
+end

@@ -1,0 +1,310 @@
+theory wpa_wnm_new_attack_gtk_Fix
+
+begin
+
+functions: KDF/1, N/1, snenc/4, sndec/2, S/1, MIC/2
+builtins: symmetric-encryption, multiset, natural-numbers
+equations: sndec(snenc(message, key, Nonce, IVnat), key) = message
+
+restriction Eq:
+    "All x y #i. Eq(x,y) @ i ==> x = y"
+
+restriction Neq:
+    "All x y #i. Neq(x,y) @ i ==> not(x = y)"
+
+restriction OnlyOneAssociate:
+    "All suppID authID PMK tid1 tid2 #i #j.
+		Associate(authID, suppID, tid1, PMK) @ i & Associate(authID, suppID, tid2, PMK) @ j 
+		==> #i = #j & tid1 = tid2 "
+
+restriction OnlyOneSupp:
+    "All suppID1 suppID2 #i #j.
+		Supp_Creat(suppID1) @ i & Supp_Creat(suppID2) @ j 
+		==> #i = #j & suppID1 = suppID2 "
+
+restriction OnlyOneAuth:
+    "All ID1 ID2 #i #j.
+		Auth_Creat(ID1) @ i & Auth_Creat(ID2) @ j 
+		==> #i = #j & ID1 = ID2 "
+
+restriction OnlyOnePMK:
+    "All PMK1 PMK2 #i #j.
+		PMK_Gen(PMK1) @ i & PMK_Gen(PMK2) @ j 
+		==> #i = #j & PMK1 = PMK2 "
+
+//restriction MemoryCanBeFreedOnlyOnce:
+//    "All pointer #i #j. Free(pointer) @ i & Free(pointer) @ j ==> #i = #j"
+
+restriction Check_Keys:
+    "All gtk1 gtk2 wnm1 wnm2 gKey #i. Check(gtk1, gtk2, wnm1, wnm2, gKey) @ i	
+		==> (gKey = gtk1) | (gKey = gtk2) | (gKey = wnm1) | (gKey = wnm2) "
+
+//restriction MemoryCanBeReadOnlyOnce:
+//    "All pointer #i #j. Read(pointer) @ i & Read(pointer) @ j ==> #i = #j"
+
+//****************************************************************
+/* BEGIN Setup */
+
+rule Supp_Create:
+    [ Fr(~suppID) ] 
+    --[ Supp_Creat(~suppID) ]-> 
+    [ !Supp(~suppID)
+    , Out(~suppID) ] 
+
+rule Auth_Create:
+    [ Fr(~authID) , Fr(~x) ] 
+    --[ Auth_Creat(~authID) ]->
+    [ !Auth(~authID) 
+    , Out(~authID) ]
+
+rule Auth_Supp_PMK_TID:
+	[ Fr(~PMK), !Auth(~authID), !Supp(~suppID)] 
+	--[ PMK_Gen(~PMK) ]->
+	[!PMKey(~PMK, ~authID, ~suppID, 'NULL')]
+
+rule Auth_Associate_With_Supp:
+	let 
+		GTK_WNM_Keys = <~gtk2, ~gtk1, ~gtk2, ~gtk1, ~gtk2, ~gtkctr, 1:nat, '1'> 
+	in 
+	[ !PMKey(~PMK, ~authID, ~suppID, 'NULL'), Fr(~tid), Fr(~gtk1), Fr(~gtk2), Fr(~gtkctr)
+	, Fr(~ptk), Fr(~ctr), Fr(~AuthIV), Fr(~SuppIV), Fr(~point),  Fr(~point1), Fr(~Loop), Fr(~Loop1)
+	]
+    --[ Associate(~authID, ~suppID, ~tid, ~PMK) ]->
+    [ AuthGTK('INIT_GTK', ~authID, ~suppID, ~tid, ~ptk, ~ctr, GTK_WNM_Keys, ~SuppIV, 1:nat, ~AuthIV, 1:nat)
+	, SuppGTK('INIT_GTK', ~suppID, ~authID, ~tid, ~ptk, ~ctr, GTK_WNM_Keys, ~AuthIV, 1:nat, ~SuppIV, 1:nat)
+	, AuthWNM('INIT_WNM', ~authID, ~suppID, ~tid, ~ptk, ~ctr, GTK_WNM_Keys, ~SuppIV, 1:nat, ~AuthIV, 1:nat)
+	, SuppWNM('INIT_WNM', ~suppID, ~authID, ~tid, ~ptk, ~ctr, GTK_WNM_Keys, ~AuthIV, 1:nat, ~SuppIV, 1:nat)
+	, SuppCom('INIT_Command', ~suppID, ~authID, ~tid, ~ptk)
+	, Comm_GTK_Data(~suppID, ~authID, ~tid, ~ptk, GTK_WNM_Keys)
+	, !PMKey(~PMK, ~authID, ~suppID, ~tid) 
+    ]
+
+//*******************************************************************
+
+
+rule Supp_Snd_WNM_Request:
+    let 
+		Old_Keys = <~gtk2, ~gtk1, ~gtk2, ~gtk1, ~gtk2, ~gtkctr, 1:nat, kid>
+		New_Keys = <~k2, ~k1, ~k2, ~k3, ~k4, ~gtkctr, 1:nat, kid>
+		//Supplicant randomizes all stored keys.
+		M1 = snenc('Request_sleep_Accept_Exit', ~ptk, SuppIV, N(%PIV))
+		n1 = (%PIV %+ 1:nat)
+    in
+    [ SuppWNM('INIT_WNM', ~suppID, ~authID, ~tid, ~ptk, ctr, Old_Keys, AuthIV, %AIV, SuppIV, %PIV)
+	, Fr(~k1), Fr(~k2), Fr(~k3), Fr(~k4)//New security measures to prevent replay attacks.
+	]
+    --[ Supp_Snd_WNM(~suppID, ~authID, ~tid, ~ptk, New_Keys)
+	  ]->
+    [ SuppWNM('Wait_GTK_WNM', ~suppID, ~authID, ~tid, ~ptk, ctr, New_Keys, AuthIV, %AIV, SuppIV, n1)
+	, Out(M1)]
+
+rule Auth_Snd_Keys_Command:
+    let 
+		Keys = <gKey, gtk1, gtk2, wnm1, wnm2, gctr, %gIV, kid>
+		newgIV = (%gIV %+ 1:nat)
+		New_Keys = <gKey, gtk1, gtk2, wnm1, wnm2, gctr, newgIV, kid>
+		M1 = snenc('Request_sleep_Accept_Exit', ~ptk, SuppIV, N(%PIV))
+		M2 = snenc(<'WNM_GTK', gKey, gctr, %gIV, kid>, ~ptk, AuthIV, N(%AIV))
+		GtkComm = snenc(<'gtk_data', ~GtkData>, gKey, gctr, %gIV)
+		supp1 = (%PIV %+ 1:nat)
+		auth1 = (%AIV %+ 1:nat)
+    in
+    [ AuthWNM('INIT_WNM', ~authID, ~suppID, ~tid, ~ptk, ctr, Keys, SuppIV, %PIV, AuthIV, %AIV)
+	, In(M1), Fr(~GtkData)
+	]
+    --[ Auth_Snd_WNM_GTK(~authID, ~suppID, ~tid, ~ptk, gKey, kid)
+	  ]->
+    [ AuthWNM('FixKeys_WNM', ~authID, ~suppID, ~tid, ~ptk, ctr, New_Keys, SuppIV, supp1, AuthIV, auth1)
+	, Out(M2), Out(GtkComm)]
+
+rule Auth_Snd_Keys_Command_NewGtk_1:
+    let 
+		Keys = <gKey, gtk1, gtk2, wnm1, wnm2, gctr, %gIV, kid>
+		newgIV = (%gIV %+ 1:nat)
+		New_Keys = <~newgtk, gtk1, ~newgtk, wnm1, ~newgtk, gctr, newgIV, '1'>
+		M2 = snenc(<'WNM_GTK', ~newgtk, gctr, %gIV, '1'>, ~ptk, AuthIV, N(%AIV))
+		GtkComm = snenc(<'gtk_data', ~GtkData>, gKey, gctr, %gIV)
+		supp1 = (%PIV %+ 1:nat)
+		auth1 = (%AIV %+ 1:nat)
+    in
+    [ AuthWNM('FixKeys_WNM', ~authID, ~suppID, ~tid, ~ptk, ctr, Keys, SuppIV, %PIV, AuthIV, %AIV)
+	, Fr(~GtkData), In('GTK_Update_One'), Fr(~newgtk)
+	]
+    --[ Auth_Snd_WNM_GTK(~authID, ~suppID, ~tid, ~ptk, gKey, '1')
+	  ]->
+    [ AuthWNM('KeysUpdate_WNM', ~authID, ~suppID, ~tid, ~ptk, ctr, New_Keys, SuppIV, supp1, AuthIV, auth1)
+	, Out(M2), Out(GtkComm)]
+
+rule Auth_Snd_Keys_Command_NewGtk_2:
+    let 
+		Keys = <gKey, gtk1, gtk2, wnm1, wnm2, gctr, %gIV, kid>
+		newgIV = (%gIV %+ 1:nat)
+		New_Keys = <~newgtk, ~newgtk, gtk2, ~newgtk, wnm2, gctr, newgIV, '2'>
+		M2 = snenc(<'WNM_GTK', ~newgtk, gctr, %gIV, '2'>, ~ptk, AuthIV, N(%AIV))
+		GtkComm = snenc(<'gtk_data', ~GtkData>, gKey, gctr, %gIV)
+		supp1 = (%PIV %+ 1:nat)
+		auth1 = (%AIV %+ 1:nat)
+    in
+    [ AuthWNM('KeysUpdate_WNM', ~authID, ~suppID, ~tid, ~ptk, ctr, Keys, SuppIV, %PIV, AuthIV, %AIV)
+	, Fr(~GtkData), In('GTK_Update_Two'), Fr(~newgtk)
+	]
+    --[ Auth_Snd_WNM_GTK(~authID, ~suppID, ~tid, ~ptk, gKey, '2')
+	  ]->
+    [ AuthWNM('Done_WNM', ~authID, ~suppID, ~tid, ~ptk, ctr, New_Keys, SuppIV, supp1, AuthIV, auth1)
+	, Out(M2), Out(GtkComm)]
+
+//Checking four keys
+rule Supp_Install_WNM_Gtk_Fail:
+    let 
+		Keys = <gtk, gtk1, gtk2, wnm1, wnm2, gctr, %gIV, kid>
+		M2 = snenc(<'WNM_GTK', gKey, gctr, %AuthgIV, kid1>, ~ptk, AuthIV, N(%newAIV))
+    in
+    [ SuppWNM('Wait_GTK_WNM', ~suppID, ~authID, ~tid, ~ptk, ctr, Keys, AuthIV, %AIV, SuppIV, n1)
+	, In(M2)
+	]
+    --[ Supp_Install_Keys_Fail(~suppID, ~authID, ~tid, ~ptk, gKey, kid)
+		, Check(gtk1, gtk2, wnm1, wnm2, gKey) 
+	  ]->
+    [ SuppWNM('FixKeys_WNM', ~suppID, ~authID, ~tid, ~ptk, ctr, Keys, AuthIV, %newAIV, SuppIV, n1)
+	] 
+
+//Checking four keys
+rule Supp_Install_WNM_Gtk_1:
+    let 
+		Keys = <gtk, gtk1, gtk2, wnm1, wnm2, gctr, %gIV, kid> 
+		M2 = snenc(<'WNM_GTK', gKey, gctr, %AuthgIV, '1'>, ~ptk, AuthIV, N(%newAIV))
+		New_Keys = <gKey, gtk1, gKey, wnm1, gKey, gctr, %AuthgIV, '1'> 
+    in
+    [ SuppWNM('FixKeys_WNM', ~suppID, ~authID, ~tid, ~ptk, ctr, Keys, AuthIV, %AIV, SuppIV, n1)
+	, Comm_GTK_Data(~suppID, ~authID, ~tid, ~ptk, old_Keys), In(M2)
+	]
+    --[ Supp_Install_WNM(~suppID, ~authID, ~tid, ~ptk, gKey, '1')
+		, Neq(gKey, gtk1), Neq(gKey, gtk2), Neq(gKey, wnm1), Neq(gKey, wnm2)
+	  ]->
+    [ SuppWNM('KeysUpdate_WNM', ~suppID, ~authID, ~tid, ~ptk, ctr, New_Keys, AuthIV, %newAIV, SuppIV, n1)
+	, Comm_GTK_Data(~suppID, ~authID, ~tid, ~ptk, New_Keys)
+	]
+
+rule Supp_Install_WNM_Gtk_2:
+    let 
+		Keys = <gtk, gtk1, gtk2, wnm1, wnm2, gctr, %gIV, kid>
+		M2 = snenc(<'WNM_GTK', gKey, gctr, %AuthgIV, '2'>, ~ptk, AuthIV, N(%newAIV))
+		New_Keys = <gKey, gKey, gtk2, gKey, wnm2, gctr, %AuthgIV, '2'> 
+    in
+    [ SuppWNM('KeysUpdate_WNM', ~suppID, ~authID, ~tid, ~ptk, ctr, Keys, AuthIV, %AIV, SuppIV, n1)
+	, Comm_GTK_Data(~suppID, ~authID, ~tid, ~ptk, old_Keys), In(M2)
+	]
+    --[ Supp_Install_WNM(~suppID, ~authID, ~tid, ~ptk, gKey, '2')
+		, Neq(gKey, gtk1), Neq(gKey, gtk2), Neq(gKey, wnm1), Neq(gKey, wnm2)
+	  ]->
+    [ SuppWNM('Wait_New_WNM', ~suppID, ~authID, ~tid, ~ptk, ctr, New_Keys, AuthIV, %newAIV, SuppIV, n1)
+	, Comm_GTK_Data(~suppID, ~authID, ~tid, ~ptk, New_Keys)
+	]
+
+rule Supp_Install_WNM_Gtk_1_Repeat:
+    let 
+		Keys = <gtk, gtk1, gtk2, wnm1, wnm2, gctr, %gIV, kid> 
+		M2 = snenc(<'WNM_GTK', gKey, gctr, %AuthgIV, '1'>, ~ptk, AuthIV, N(%newAIV))
+		New_Keys = <gKey, gtk1, gKey, wnm1, gKey, gctr, %AuthgIV, '1'> 
+    in
+    [ SuppWNM('Wait_New_WNM', ~suppID, ~authID, ~tid, ~ptk, ctr, Keys, AuthIV, %AIV, SuppIV, n1)
+	, Comm_GTK_Data(~suppID, ~authID, ~tid, ~ptk, old_Keys), In(M2)
+	]
+    --[ Supp_Install_WNM(~suppID, ~authID, ~tid, ~ptk, gKey, '1')
+		, Neq(gKey, gtk1), Neq(gKey, gtk2), Neq(gKey, wnm1), Neq(gKey, wnm2)
+	  ]->
+    [ SuppWNM('Done_WNM', ~suppID, ~authID, ~tid, ~ptk, ctr, New_Keys, AuthIV, %newAIV, SuppIV, n1)
+	, Comm_GTK_Data(~suppID, ~authID, ~tid, ~ptk, New_Keys)
+	]
+
+rule Supp_Install_WNM_Gtk_2_Repeat:
+    let 
+		Keys = <gtk, gtk1, gtk2, wnm1, wnm2, gctr, %gIV, kid>
+		M2 = snenc(<'WNM_GTK', gKey, gctr, %AuthgIV, '2'>, ~ptk, AuthIV, N(%newAIV))
+		New_Keys = <gKey, gKey, gtk2, gKey, wnm2, gctr, %AuthgIV, '2'> 
+    in
+    [ SuppWNM('Wait_New_WNM', ~suppID, ~authID, ~tid, ~ptk, ctr, Keys, AuthIV, %AIV, SuppIV, n1)
+	, Comm_GTK_Data(~suppID, ~authID, ~tid, ~ptk, old_Keys), In(M2)
+	]
+    --[ Supp_Install_WNM(~suppID, ~authID, ~tid, ~ptk, gKey, '2')
+		, Neq(gKey, gtk1), Neq(gKey, gtk2), Neq(gKey, wnm1), Neq(gKey, wnm2)
+	  ]->
+    [ SuppWNM('Done_WNM', ~suppID, ~authID, ~tid, ~ptk, ctr, New_Keys, AuthIV, %newAIV, SuppIV, n1)
+	, Comm_GTK_Data(~suppID, ~authID, ~tid, ~ptk, New_Keys)
+	]
+
+rule Supp_Rcv_WNM_Command_Init:
+    let 
+		GTK_WNM_Keys = <gtk, gtk1, gtk2, wnm1, wnm2, gctr, %gIV1, kid>
+		GtkComm = snenc(<'gtk_data', ~GtkData>, gKey, gctr, %gIV)
+		newgIV = (%gIV %+ 1:nat)
+		New_Keys = <gKey, gtk1, gtk2, wnm1, wnm2, gctr, newgIV, kid>
+    in
+    [ SuppCom('INIT_Command', ~suppID, ~authID, ~tid, ~ptk)
+	, Comm_GTK_Data(~suppID, ~authID, ~tid, ~ptk, GTK_WNM_Keys), In(GtkComm)
+	]
+    --[ Supp_Rcv_Command(~suppID, ~authID, ~ptk, gKey, ~GtkData), Eq(gKey, gtk)
+	  ]->
+    [ SuppCom('Wait_GTK_Command', ~suppID, ~authID, ~tid, ~ptk)
+	, Comm_GTK_Data(~suppID, ~authID, ~tid, ~ptk, New_Keys)
+	]
+
+rule Supp_Rcv_WNM_Command_Repeat:
+    let 
+		GTK_WNM_Keys = <gtk, gtk1, gtk2, wnm1, wnm2, gctr, %gIV, kid>
+		GtkComm = snenc(<'gtk_data', ~GtkData>, gKey, gctr, %gIV)
+		newgIV = (%gIV %+ 1:nat)
+		New_Keys = <gKey, gtk1, gtk2, wnm1, wnm2, gctr, newgIV, kid>
+    in
+    [ SuppCom('Wait_GTK_Command', ~suppID, ~authID, ~tid, ~ptk)
+	, Comm_GTK_Data(~suppID, ~authID, ~tid, ~ptk, GTK_WNM_Keys), In(GtkComm)
+	]
+    --[ Supp_Rcv_Command_Again(~suppID, ~authID, ~ptk, gKey, ~GtkData), Eq(gKey, gtk)
+	  ]->
+    [ 
+	  Comm_GTK_Data(~suppID, ~authID, ~tid, ~ptk, New_Keys)
+	]
+
+
+//*******************************************************************
+
+
+lemma Association_created [reuse]:
+    "All authID suppID tid PMK #i.
+	Associate(authID, suppID, tid, PMK) @ i
+     ==> (Ex #j. j < i & Auth_Creat(authID) @ j) &
+         (Ex #k. k < i & Supp_Creat(suppID) @ k)"
+
+lemma Association_is_unique [reuse, use_induction, heuristic=C]:
+    "All authID1 authID2 tID suppID1 suppID2 PMK1 PMK2 #i #j.
+     Associate(authID1, suppID1, tID, PMK1) @ i &
+     Associate(authID2, suppID2, tID, PMK2) @ j 
+     ==> #i = #j"
+
+//There is no replay attack if this lemma is falsified.
+lemma gtk_rekeys_attack [use_induction, heuristic=S]:
+	exists-trace
+	"Ex suppID authID ptk gtk GtkData #i #j . (i < j) & 
+		Supp_Rcv_Command(suppID, authID, ptk, gtk, GtkData) @ i & 
+		Supp_Rcv_Command_Again(suppID, authID, ptk, gtk, GtkData) @ j "
+
+end
+
+/*
+
+==============================================================================
+summary of summaries:
+
+analyzed: WPA_WNM_new_attack_Fix.spthy
+
+  Association_created (all-traces): verified (6 steps)
+  Association_is_unique (all-traces): verified (4 steps)
+  gtk_rekeys_attack (exists-trace): falsified - no trace found (1964 steps)
+
+==============================================================================
+
+real    3m5.678s
+user    21m26.300s
+sys     7m8.952s
+
+*/
