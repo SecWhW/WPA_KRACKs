@@ -1,6 +1,7 @@
 # WPA_KRACKs
 
 /***********************************************/
+
 Prerequisites:
 
 We used the latest extended Tamarin prover (version 1.7.1) to produce our formal model. Installation instructions for Tamarin can be found in https://tamarin-prover.github.io/manual/book/002_installation.html.
@@ -13,6 +14,7 @@ For example, the following command gives a web GUI(http://127.0.0.1:3001) to exp
 
 
 /***********************************************/
+
 Files of the Formal Model:
 
 (1)WPA_plaintext_handshake_init.spthy: A formal model of WPA2 including details and krack attack on the plaintext handshake process.
