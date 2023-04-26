@@ -6,7 +6,9 @@ Prerequisites:
 
 We used the latest extended Tamarin prover (version 1.7.1) to produce our formal model. Installation instructions for Tamarin can be found in https://tamarin-prover.github.io/manual/book/002_installation.html.
 Moreover, a pre-built binariy of Tamarin version that supports natural number can be found in a docker from Cremers et al. After installing Docker, one simply has to pull the image and enter it to load our models:
+
 docker pull securityprotocolsresearch/tamarin:st
+
 docker run -it securityprotocolsresearch/tamarin:st bash
 
 You can copy the latest extended Tamarin prover from the image thus one can simply run our models with it.
