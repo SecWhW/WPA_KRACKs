@@ -12,7 +12,7 @@ docker pull securityprotocolsresearch/tamarin:st
 docker run -it securityprotocolsresearch/tamarin:st bash
 
 You can copy the latest extended Tamarin prover from the image thus one can simply run our models with it.
-For example, the following command gives a web GUI(http://127.0.0.1:3001) to explore the details of a formal model:
+For example, the following command gives us a web GUI(http://127.0.0.1:3001) to explore the details of a formal model:
 
  ./subterm-tamarin interactive WPA_WNM_new_attack_Fix.spthy
 
