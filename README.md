@@ -5,7 +5,7 @@
 Prerequisites:
 
 We used the latest extended Tamarin prover (version 1.7.1) to produce our formal model. Installation instructions for Tamarin can be found in https://tamarin-prover.github.io/manual/book/002_installation.html.
-Moreover, a pre-built binariy of Tamarin version that supports natural number can be found in a docker from Cremers et al. After installing Docker, one simply has to pull the image and enter it to load our models:
+Moreover, a pre-built binariy of Tamarin version that supports natural number can be found in a docker from Cremers et al. After installing Docker then one can pull the image and enter it to load our models:
 
 docker pull securityprotocolsresearch/tamarin:st
 
@@ -23,13 +23,13 @@ Files of the Formal Model:
 
 (1)WPA_plaintext_handshake_init.spthy: A formal model of WPA2 including details and krack attack on the plaintext handshake process.
 
-(2)WPA_plaintext_handshake_race_condition.spthy: A formal model of WPA2 including details and krack attack on the plaintext handshake process. This model allows Supplicant to receive two key installation commands in a row. When Supplicant receives the key installation command again, it still sends the response message in plaintext format. As a result, there are only two encrypted messages in the protocol.
+(2)WPA_plaintext_handshake_race_condition.spthy: A formal model of WPA2 including details and krack attack on the plaintext handshake process. This model allows the Supplicant to receive two key installation commands in a row. When the Supplicant receives the key installation command again, it still sends the response message in plaintext format. As a result, there are only two encrypted messages in the protocol.
 
-(3)WPA_plaintext_handshake_race_condition_newdefinition.spthy: A formal model of WPA2 including details and krack attack on the plaintext handshake process. This model allows Supplicant to receive two key installation commands in a row. When Supplicant receives the key installation command again, there are more than two encrypted messages in the protocol. If the attack rule with side effects is used, Tamarin will loop to find the source of the unknown ciphertext. Therefore, we used the equivalent Krack attack definition and removed the original attack rule.
+(3)WPA_plaintext_handshake_race_condition_newdefinition.spthy: A formal model of WPA2 including details and krack attack on the plaintext handshake process. This model allows the Supplicant to receive two key installation commands in a row. When the Supplicant receives the key installation command again, there are more than two encrypted messages in the protocol. If the attack rule with side effects is used, Tamarin will loop to find the source of the unknown ciphertext. Therefore, we used the equivalent Krack attack definition and removed the original attack rule.
 
 (4)WPA_ciphertext_handshake_init.spthy: A formal model of WPA2 including details and krack attack on the ciphertext handshake.
 
-(5)WPA_ciphertext_handshake_race_condition.spthy: A formal model of WPA2 including details and krack attack on the ciphertext handshake. This model allows Supplicant to receive two key installation commands in a row.
+(5)WPA_ciphertext_handshake_race_condition.spthy: A formal model of WPA2 including details and krack attack on the ciphertext handshake. This model allows the Supplicant to receive two key installation commands in a row.
 
 (6)WPA_GTK_Init_Attack.spthy: A formal model of WPA2 including details and krack attack on the GTK handshake process.
 
