@@ -1,0 +1,14 @@
+WNM KRACK ATTACK
+Mode: defense
+Timestamp: 20260528_005641
+wpa_supplicant: /home/yh3h636/krack_experiment/krackattacks-scripts/wpa_supplicant/wpa_supplicant
+
+GTK_0: bd5ce7b960c4ce5ff0d06861c64f1bf4
+Initial PN: 1
+
+GTK 安装记录（共 1 次）:
+  [1] 行272: keyidx=1 GTK=bd5ce7b960c4ce5ff0d06861c64f1bf4
+
+Result: DEFENDED
+Pcap: /home/yh3h636/wireless_sec_exp/captures/fig2_defense_20260528_005641.pcapng
+WPA debug log: /tmp/wpa_debug_fig2_defense_20260528_005641.log

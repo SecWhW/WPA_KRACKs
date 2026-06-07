@@ -1,0 +1,16 @@
+WNM KRACK ATTACK
+Mode: attack
+Timestamp: 20260528_005452
+wpa_supplicant: /usr/sbin/wpa_supplicant
+
+GTK_0: 061be929883b148b5de7a07d8dc304a6
+Initial PN: 1
+
+GTK 安装记录（共 3 次）:
+  [1] 行652: keyidx=1 GTK=061be929883b148b5de7a07d8dc304a6
+  [2] 行727: keyidx=1 GTK=10e3da54d30a7644c0680a45598f7df3
+  [3] 行840: keyidx=1 GTK=061be929883b148b5de7a07d8dc304a6
+
+Result: REINSTALL_CONFIRMED
+Pcap: /home/yh3h636/wireless_sec_exp/captures/fig2_attack_20260528_005452.pcapng
+WPA debug log: /tmp/wpa_debug_fig2_attack_20260528_005452.log

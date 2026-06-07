@@ -1,0 +1,356 @@
+wpa_supplicant v2.7-devel-v1-25-g2dc8012ad+
+random: Trying to read entropy from /dev/random
+Successfully initialized wpa_supplicant
+Initializing interface 'wlan1' conf '/tmp/victim.conf' driver 'nl80211' ctrl_interface 'N/A' bridge 'N/A'
+Configuration file '/tmp/victim.conf' -> '/tmp/victim.conf'
+Reading configuration file '/tmp/victim.conf'
+Priority group 0
+   id=0 ssid='testnetwork'
+nl80211: TDLS supported
+nl80211: TDLS external setup
+nl80211: Supported cipher 00-0f-ac:1
+nl80211: Supported cipher 00-0f-ac:5
+nl80211: Supported cipher 00-0f-ac:2
+nl80211: Supported cipher 00-0f-ac:4
+nl80211: Supported cipher 00-0f-ac:10
+nl80211: Supported cipher 00-0f-ac:8
+nl80211: Supported cipher 00-0f-ac:9
+nl80211: Supported cipher 00-0f-ac:6
+nl80211: Supported cipher 00-0f-ac:13
+nl80211: Supported cipher 00-0f-ac:11
+nl80211: Supported cipher 00-0f-ac:12
+nl80211: Using driver-based off-channel TX
+nl80211: Driver-advertised extended capabilities (default) - hexdump(len=8): 04 00 40 00 00 00 00 40
+nl80211: Driver-advertised extended capabilities mask (default) - hexdump(len=8): 04 00 40 00 00 00 00 40
+nl80211: Supported vendor command: vendor_id=0x1374 subcmd=1
+nl80211: Supported vendor event: vendor_id=0x1374 subcmd=1
+nl80211: Use separate P2P group interface (driver advertised support)
+nl80211: use P2P_DEVICE support
+nl80211: interface wlan1 in phy phy1
+nl80211: Set mode ifindex 5 iftype 2 (STATION)
+nl80211: Subscribe to mgmt frames with non-AP handle 0x616317208b60
+nl80211: Register frame type=0xd0 (WLAN_FC_STYPE_ACTION) nl_handle=0x616317208b60 match=06
+nl80211: Register frame type=0xd0 (WLAN_FC_STYPE_ACTION) nl_handle=0x616317208b60 match=0a07
+nl80211: Register frame type=0xd0 (WLAN_FC_STYPE_ACTION) nl_handle=0x616317208b60 match=0a11
+nl80211: Register frame type=0xd0 (WLAN_FC_STYPE_ACTION) nl_handle=0x616317208b60 match=1101
+nl80211: Register frame type=0xd0 (WLAN_FC_STYPE_ACTION) nl_handle=0x616317208b60 match=1102
+nl80211: Register frame type=0xd0 (WLAN_FC_STYPE_ACTION) nl_handle=0x616317208b60 match=0505
+nl80211: Register frame type=0xd0 (WLAN_FC_STYPE_ACTION) nl_handle=0x616317208b60 match=0500
+rfkill: initial event: idx=1 type=1 op=0 soft=0 hard=0
+netlink: Operstate: ifindex=5 linkmode=1 (userspace-control), operstate=5 (IF_OPER_DORMANT)
+Add interface wlan1 to a new radio phy1
+nl80211: Regulatory information - country=00
+nl80211: 2402-2472 @ 40 MHz 20 mBm
+nl80211: 2457-2482 @ 20 MHz 20 mBm (no IR)
+nl80211: 2474-2494 @ 20 MHz 20 mBm (no OFDM) (no IR)
+nl80211: 5170-5250 @ 80 MHz 20 mBm (no IR)
+nl80211: 5250-5330 @ 80 MHz 20 mBm (DFS) (no IR)
+nl80211: 5490-5730 @ 160 MHz 20 mBm (DFS) (no IR)
+nl80211: 5735-5835 @ 80 MHz 20 mBm (no IR)
+nl80211: 57240-63720 @ 2160 MHz 0 mBm
+wlan1: Own MAC address: 02:00:00:00:01:00
+wpa_driver_nl80211_set_key: ifindex=5 (wlan1) alg=0 addr=(nil) key_idx=0 set_tx=0 seq_len=0 key_len=0
+wpa_driver_nl80211_set_key: ifindex=5 (wlan1) alg=0 addr=(nil) key_idx=1 set_tx=0 seq_len=0 key_len=0
+wpa_driver_nl80211_set_key: ifindex=5 (wlan1) alg=0 addr=(nil) key_idx=2 set_tx=0 seq_len=0 key_len=0
+wpa_driver_nl80211_set_key: ifindex=5 (wlan1) alg=0 addr=(nil) key_idx=3 set_tx=0 seq_len=0 key_len=0
+wlan1: RSN: flushing PMKID list in the driver
+nl80211: Flush PMKIDs
+wlan1: Setting scan request: 0.100000 sec
+ENGINE: Loading dynamic engine
+ENGINE: Loading dynamic engine
+EAPOL: SUPP_PAE entering state DISCONNECTED
+EAPOL: Supplicant port status: Unauthorized
+nl80211: Skip set_supp_port(unauthorized) while not associated
+EAPOL: KEY_RX entering state NO_KEY_RECEIVE
+EAPOL: SUPP_BE entering state INITIALIZE
+EAP: EAP entering state DISABLED
+wlan1: Added interface wlan1
+wlan1: State: DISCONNECTED -> DISCONNECTED
+nl80211: Set wlan1 operstate 0->0 (DORMANT)
+netlink: Operstate: ifindex=5 linkmode=-1 (no change), operstate=5 (IF_OPER_DORMANT)
+random: Got 20/20 bytes from /dev/random
+RTM_NEWLINK: ifi_index=5 ifname=wlan1 operstate=2 linkmode=1 ifi_family=0 ifi_flags=0x1003 ([UP])
+wlan1: State: DISCONNECTED -> SCANNING
+wlan1: Starting AP scan for wildcard SSID
+wlan1: Add radio work 'scan'@0x61631726cf50
+wlan1: First radio work item in the queue - schedule start immediately
+wlan1: Starting radio work 'scan'@0x61631726cf50 after 0.000033 second wait
+wlan1: nl80211: scan request
+Scan requested (ret=0) - scan timeout 10 seconds
+nl80211: Drv Event 33 (NL80211_CMD_TRIGGER_SCAN) received for wlan1
+wlan1: nl80211: Scan trigger
+wlan1: Event SCAN_STARTED (46) received
+wlan1: Own scan request started a scan in 0.000077 seconds
+EAPOL: disable timer tick
+nl80211: Drv Event 34 (NL80211_CMD_NEW_SCAN_RESULTS) received for wlan1
+wlan1: nl80211: New scan results available
+nl80211: Scan probed for SSID ''
+nl80211: Scan included frequencies: 2412 2417 2422 2427 2432 2437 2442 2447 2452 2457 2462 2467 2472 2484 5180 5200 5220 5240 5260 5280 5300 5320 5500 5520 5540 5560 5580 5600 5620 5640 5660 5680 5700 5745 5765 5785 5805 5825
+wlan1: Event SCAN_RESULTS (3) received
+wlan1: Scan completed in 3.719935 seconds
+nl80211: send_and_recv->nl_recvmsgs failed: -33
+nl80211: Received scan results (1 BSSes)
+wlan1: BSS: Start scan result update 1
+wlan1: BSS: Add new id 0 BSSID 02:00:00:00:00:00 SSID 'testnetwork' freq 2412
+BSS: last_scan_res_used=1/32
+wlan1: New scan results available (own=1 ext=0)
+wlan1: Radio work 'scan'@0x61631726cf50 done in 3.721953 seconds
+wlan1: radio_work_free('scan'@0x61631726cf50): num_active_works --> 0
+wlan1: Selecting BSS from priority group 0
+wlan1: 0: 02:00:00:00:00:00 ssid='testnetwork' wpa_ie_len=0 rsn_ie_len=20 caps=0x411 level=-30 freq=2412 
+wlan1:    selected based on RSN IE
+wlan1:    selected BSS 02:00:00:00:00:00 ssid='testnetwork'
+wlan1: Considering connect request: reassociate: 0  selected: 02:00:00:00:00:00  bssid: 00:00:00:00:00:00  pending: 00:00:00:00:00:00  wpa_state: SCANNING  ssid=0x616317208fa0  current_ssid=(nil)
+wlan1: Request association with 02:00:00:00:00:00
+wlan1: No ongoing scan/p2p-scan found to abort
+wlan1: Add radio work 'sme-connect'@0x61631726cf50
+wlan1: First radio work item in the queue - schedule start immediately
+RSN: Ignored PMKID candidate without preauth flag
+wlan1: Starting radio work 'sme-connect'@0x61631726cf50 after 0.000327 second wait
+wlan1: WPA: clearing own WPA/RSN IE
+wlan1: Automatic auth_alg selection: 0x1
+RSN: PMKSA cache search - network_ctx=(nil) try_opportunistic=0
+RSN: Search for BSSID 02:00:00:00:00:00
+RSN: No PMKSA cache entry found
+wlan1: RSN: using IEEE 802.11i/D9.0
+wlan1: WPA: Selected cipher suites: group 16 pairwise 16 key_mgmt 2 proto 2
+wlan1: WPA: clearing AP WPA IE
+WPA: set AP RSN IE - hexdump(len=22): 30 14 01 00 00 0f ac 04 01 00 00 0f ac 04 01 00 00 0f ac 02 0c 00
+wlan1: WPA: using GTK CCMP
+wlan1: WPA: using PTK CCMP
+wlan1: WPA: using KEY_MGMT WPA-PSK
+WPA: Set own WPA IE default - hexdump(len=22): 30 14 01 00 00 0f ac 04 01 00 00 0f ac 04 01 00 00 0f ac 02 00 00
+WPA: Set PMK based on external data - hexdump(len=32): e8 01 54 8d 2e 7e 7d 6c fa dd c2 34 5e 5b e6 81 67 75 91 61 10 2a 15 a8 64 54 0e 6e 59 79 64 10
+RRM: Determining whether RRM can be used - device support: 0x10
+RRM: No RRM in network
+Added supported operating classes IE - hexdump(len=23): 3b 15 51 51 52 53 54 73 74 75 76 77 78 79 7a 7b 7c 7d 7e 7f 80 81 82
+EAPOL: External notification - EAP success=0
+EAPOL: External notification - EAP fail=0
+EAPOL: External notification - portControl=Auto
+wlan1: Cancelling scan request
+wlan1: SME: Trying to authenticate with 02:00:00:00:00:00 (SSID='testnetwork' freq=2412 MHz)
+EAPOL: External notification - portValid=0
+wlan1: State: SCANNING -> AUTHENTICATING
+nl80211: Authenticate (ifindex=5)
+  * bssid=02:00:00:00:00:00
+  * freq=2412
+  * SSID - hexdump_ascii(len=11):
+     74 65 73 74 6e 65 74 77 6f 72 6b                  testnetwork     
+  * IEs - hexdump(len=0): [NULL]
+  * Auth Type 0
+nl80211: Authentication request send successfully
+RTM_NEWLINK: ifi_index=5 ifname=wlan1 wext ifi_family=0 ifi_flags=0x1003 ([UP])
+nl80211: Drv Event 19 (NL80211_CMD_NEW_STATION) received for wlan1
+nl80211: New station 02:00:00:00:00:00
+nl80211: Ignored event (cmd=19) for foreign interface (ifindex 4 wdev 0x0)
+nl80211: Ignored event (cmd=60) for foreign interface (ifindex 4 wdev 0x0)
+nl80211: Drv Event 37 (NL80211_CMD_AUTHENTICATE) received for wlan1
+nl80211: Authenticate event
+wlan1: Event AUTH (10) received
+wlan1: SME: Authentication response: peer=02:00:00:00:00:00 auth_type=0 auth_transaction=2 status_code=0
+wlan1: Trying to associate with 02:00:00:00:00:00 (SSID='testnetwork' freq=2412 MHz)
+wlan1: State: AUTHENTICATING -> ASSOCIATING
+nl80211: Set wlan1 operstate 0->0 (DORMANT)
+netlink: Operstate: ifindex=5 linkmode=-1 (no change), operstate=5 (IF_OPER_DORMANT)
+WPA: set own WPA/RSN IE - hexdump(len=22): 30 14 01 00 00 0f ac 04 01 00 00 0f ac 04 01 00 00 0f ac 02 00 00
+nl80211: Associate (ifindex=5)
+  * bssid=02:00:00:00:00:00
+  * freq=2412
+  * SSID - hexdump_ascii(len=11):
+     74 65 73 74 6e 65 74 77 6f 72 6b                  testnetwork     
+  * IEs - hexdump(len=55): 30 14 01 00 00 0f ac 04 01 00 00 0f ac 04 01 00 00 0f ac 02 00 00 7f 08 04 00 40 00 00 00 00 40 3b 15 51 51 52 53 54 73 74 75 76 77 78 79 7a 7b 7c 7d 7e 7f 80 81 82
+  * WPA Versions 0x2
+  * pairwise=0xfac04
+  * group=0xfac04
+  * akm=0xfac02
+nl80211: Association request send successfully
+RTM_NEWLINK: ifi_index=5 ifname=wlan1 wext ifi_family=0 ifi_flags=0x11003 ([UP][LOWER_UP])
+RTM_NEWLINK: ifi_index=5 ifname=wlan1 wext ifi_family=0 ifi_flags=0x11003 ([UP][LOWER_UP])
+RTM_NEWLINK: ifi_index=5 ifname=wlan1 wext ifi_family=0 ifi_flags=0x11003 ([UP][LOWER_UP])
+RTM_NEWLINK: ifi_index=5 ifname=wlan1 operstate=5 linkmode=1 ifi_family=0 ifi_flags=0x11003 ([UP][LOWER_UP])
+nl80211: Ignored event (cmd=60) for foreign interface (ifindex 4 wdev 0x0)
+nl80211: Drv Event 38 (NL80211_CMD_ASSOCIATE) received for wlan1
+nl80211: Associate event
+nl80211: Associated on 2412 MHz
+nl80211: Associated with 02:00:00:00:00:00
+nl80211: Set drv->ssid based on scan res info to 'testnetwork'
+wlan1: Event ASSOC (0) received
+wlan1: Association info event
+resp_ies - hexdump(len=52): 01 08 82 84 8b 96 0c 12 18 24 32 04 30 48 60 6c 7f 08 04 00 40 00 00 00 00 40 dd 18 00 50 f2 02 01 01 00 00 03 a4 00 00 27 a4 00 00 42 43 5e 00 62 32 2f 00
+wlan1: freq=2412 MHz
+wlan1: State: ASSOCIATING -> ASSOCIATED
+nl80211: Set wlan1 operstate 0->0 (DORMANT)
+netlink: Operstate: ifindex=5 linkmode=-1 (no change), operstate=5 (IF_OPER_DORMANT)
+wlan1: Associated to a new BSS: BSSID=02:00:00:00:00:00
+wlan1: Associated with 02:00:00:00:00:00
+wlan1: WPA: Association event - clear replay counter
+wlan1: WPA: Clear old PTK
+EAPOL: External notification - portEnabled=0
+EAPOL: External notification - portValid=0
+EAPOL: External notification - EAP success=0
+EAPOL: External notification - portEnabled=1
+EAPOL: SUPP_PAE entering state CONNECTING
+EAPOL: enable timer tick
+EAPOL: SUPP_BE entering state IDLE
+wlan1: Setting authentication timeout: 10 sec 0 usec
+wlan1: Cancelling scan request
+WMM AC: AC mandatory: AC_BE=0 AC_BK=0 AC_VI=0 AC_VO=0
+WMM AC: U-APSD queues=0x0
+WMM AC: Valid WMM association, WMM AC is enabled
+wlan1: CTRL-EVENT-SUBNET-STATUS-UPDATE status=0
+nl80211: Drv Event 46 (NL80211_CMD_CONNECT) received for wlan1
+nl80211: Ignore connect event (cmd=46) when using userspace SME
+l2_packet_receive: src=02:00:00:00:00:00 len=99
+wlan1: RX EAPOL from 02:00:00:00:00:00
+wlan1: Setting authentication timeout: 10 sec 0 usec
+wlan1: IEEE 802.1X RX: version=2 type=3 length=95
+wlan1:   EAPOL-Key type=2
+wlan1:   key_info 0x8a (ver=2 keyidx=0 rsvd=0 Pairwise Ack)
+wlan1:   key_length=16 key_data_length=0
+  replay_counter - hexdump(len=8): 00 00 00 00 00 00 00 01
+  key_nonce - hexdump(len=32): 96 5f 6a 3f 08 ee 65 b1 25 6e c5 df 07 04 d8 7f 82 df fa 69 bc b7 d9 22 af c4 91 83 8b 16 62 72
+  key_iv - hexdump(len=16): 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  key_rsc - hexdump(len=8): 00 00 00 00 00 00 00 00
+  key_id (reserved) - hexdump(len=8): 00 00 00 00 00 00 00 00
+  key_mic - hexdump(len=16): 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+wlan1: State: ASSOCIATED -> 4WAY_HANDSHAKE
+wlan1: WPA: RX message 1 of 4-Way Handshake from 02:00:00:00:00:00 (ver=2)
+RSN: msg 1/4 key data - hexdump(len=0):
+WPA: Renewed SNonce - hexdump(len=32): 96 19 26 97 29 94 1a 9c c0 bf 1b 1f e4 c5 e7 76 75 a4 98 ef 6f d1 7a 18 de 3a 14 51 fd d3 79 cc
+WPA: PTK derivation using PRF(SHA1)
+WPA: PTK derivation - A1=02:00:00:00:01:00 A2=02:00:00:00:00:00
+WPA: Nonce1 - hexdump(len=32): 96 19 26 97 29 94 1a 9c c0 bf 1b 1f e4 c5 e7 76 75 a4 98 ef 6f d1 7a 18 de 3a 14 51 fd d3 79 cc
+WPA: Nonce2 - hexdump(len=32): 96 5f 6a 3f 08 ee 65 b1 25 6e c5 df 07 04 d8 7f 82 df fa 69 bc b7 d9 22 af c4 91 83 8b 16 62 72
+WPA: PMK - hexdump(len=32): e8 01 54 8d 2e 7e 7d 6c fa dd c2 34 5e 5b e6 81 67 75 91 61 10 2a 15 a8 64 54 0e 6e 59 79 64 10
+WPA: PTK - hexdump(len=48): 08 cf 58 b3 db 65 88 5d 3d c3 6e c6 08 f5 36 77 88 97 a9 06 e7 ae 32 23 6d 0b 81 f4 dc d6 46 13 24 89 d1 33 be 08 2b 7e d4 b7 48 81 0b 4d 17 00
+WPA: KCK - hexdump(len=16): 08 cf 58 b3 db 65 88 5d 3d c3 6e c6 08 f5 36 77
+WPA: KEK - hexdump(len=16): 88 97 a9 06 e7 ae 32 23 6d 0b 81 f4 dc d6 46 13
+WPA: TK - hexdump(len=16): 24 89 d1 33 be 08 2b 7e d4 b7 48 81 0b 4d 17 00
+WPA: WPA IE for msg 2/4 - hexdump(len=22): 30 14 01 00 00 0f ac 04 01 00 00 0f ac 04 01 00 00 0f ac 02 00 00
+WPA: Replay Counter - hexdump(len=8): 00 00 00 00 00 00 00 01
+wlan1: WPA: Sending EAPOL-Key 2/4
+WPA: Send EAPOL-Key frame to 02:00:00:00:00:00 ver=2 mic_len=16 key_mgmt=0x2
+WPA: EAPOL-Key MIC using HMAC-SHA1
+WPA: KCK - hexdump(len=16): 08 cf 58 b3 db 65 88 5d 3d c3 6e c6 08 f5 36 77
+WPA: Derived Key MIC - hexdump(len=16): 4e 7b b6 3d 40 48 74 f2 ee 66 f6 b3 58 82 70 e6
+l2_packet_receive: src=02:00:00:00:00:00 len=155
+wlan1: RX EAPOL from 02:00:00:00:00:00
+wlan1: IEEE 802.1X RX: version=2 type=3 length=151
+wlan1:   EAPOL-Key type=2
+wlan1:   key_info 0x13ca (ver=2 keyidx=0 rsvd=0 Pairwise Install Ack MIC Secure Encr)
+wlan1:   key_length=16 key_data_length=56
+  replay_counter - hexdump(len=8): 00 00 00 00 00 00 00 02
+  key_nonce - hexdump(len=32): 96 5f 6a 3f 08 ee 65 b1 25 6e c5 df 07 04 d8 7f 82 df fa 69 bc b7 d9 22 af c4 91 83 8b 16 62 72
+  key_iv - hexdump(len=16): 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  key_rsc - hexdump(len=8): 00 00 00 00 00 00 00 00
+  key_id (reserved) - hexdump(len=8): 00 00 00 00 00 00 00 00
+  key_mic - hexdump(len=16): 23 22 9e 6b 37 bf 41 ca c4 bb 6b 5a 25 02 0f fc
+WPA: EAPOL-Key MIC using HMAC-SHA1
+RSN: encrypted key data - hexdump(len=56): 3b 7e f9 5b c2 d3 cc 01 09 01 e0 12 7e e0 7f c2 72 dd c2 f3 a0 75 07 90 4d 02 a0 e0 f2 42 94 1b fe e8 05 cd e0 b5 56 57 78 44 8e e0 1b 49 3d fb 96 c9 6d 00 45 71 4c 14
+WPA: Decrypt Key Data using AES-UNWRAP (KEK length 16)
+WPA: decrypted EAPOL-Key key data - hexdump(len=48): 30 14 01 00 00 0f ac 04 01 00 00 0f ac 04 01 00 00 0f ac 02 0c 00 dd 16 00 0f ac 01 01 00 bd 5c e7 b9 60 c4 ce 5f f0 d0 68 61 c6 4f 1b f4 dd 00
+wlan1: State: 4WAY_HANDSHAKE -> 4WAY_HANDSHAKE
+wlan1: WPA: RX message 3 of 4-Way Handshake from 02:00:00:00:00:00 (ver=2)
+WPA: IE KeyData - hexdump(len=48): 30 14 01 00 00 0f ac 04 01 00 00 0f ac 04 01 00 00 0f ac 02 0c 00 dd 16 00 0f ac 01 01 00 bd 5c e7 b9 60 c4 ce 5f f0 d0 68 61 c6 4f 1b f4 dd 00
+WPA: RSN IE in EAPOL-Key - hexdump(len=22): 30 14 01 00 00 0f ac 04 01 00 00 0f ac 04 01 00 00 0f ac 02 0c 00
+WPA: GTK in EAPOL-Key - hexdump(len=24): dd 16 00 0f ac 01 01 00 bd 5c e7 b9 60 c4 ce 5f f0 d0 68 61 c6 4f 1b f4
+wlan1: WPA: Sending EAPOL-Key 4/4
+WPA: Send EAPOL-Key frame to 02:00:00:00:00:00 ver=2 mic_len=16 key_mgmt=0x2
+WPA: EAPOL-Key MIC using HMAC-SHA1
+WPA: KCK - hexdump(len=16): 08 cf 58 b3 db 65 88 5d 3d c3 6e c6 08 f5 36 77
+WPA: Derived Key MIC - hexdump(len=16): b8 76 c0 1b dc cd 53 10 e9 f3 6e 7e 28 d9 2d cb
+wlan1: WPA: Installing PTK to the driver
+wlan1: RSS-KRACK: PTK IV randomized
+wpa_driver_nl80211_set_key: ifindex=5 (wlan1) alg=3 addr=0x616317230498 key_idx=0 set_tx=1 seq_len=6 key_len=16
+nl80211: KEY_DATA - hexdump(len=16): 24 89 d1 33 be 08 2b 7e d4 b7 48 81 0b 4d 17 00
+nl80211: KEY_SEQ - hexdump(len=6): 84 11 04 42 d3 70
+   addr=02:00:00:00:00:00
+EAPOL: External notification - portValid=1
+wlan1: State: 4WAY_HANDSHAKE -> GROUP_HANDSHAKE
+RSN: received GTK in pairwise handshake - hexdump(len=18): 01 00 bd 5c e7 b9 60 c4 ce 5f f0 d0 68 61 c6 4f 1b f4
+WPA: Group Key - hexdump(len=16): bd 5c e7 b9 60 c4 ce 5f f0 d0 68 61 c6 4f 1b f4
+wlan1: WPA: Installing GTK to the driver (keyidx=1 tx=0 len=16)
+WPA: RSC - hexdump(len=6): 00 00 00 00 00 00
+wpa_driver_nl80211_set_key: ifindex=5 (wlan1) alg=3 addr=0x6162ddfb526f key_idx=1 set_tx=0 seq_len=6 key_len=16
+nl80211: KEY_DATA - hexdump(len=16): bd 5c e7 b9 60 c4 ce 5f f0 d0 68 61 c6 4f 1b f4
+nl80211: KEY_SEQ - hexdump(len=6): 00 00 00 00 00 00
+   broadcast key
+wlan1: WPA: Key negotiation completed with 02:00:00:00:00:00 [PTK=CCMP GTK=CCMP]
+wlan1: Cancelling authentication timeout
+wlan1: State: GROUP_HANDSHAKE -> COMPLETED
+wlan1: Radio work 'sme-connect'@0x61631726cf50 done in 0.052121 seconds
+wlan1: radio_work_free('sme-connect'@0x61631726cf50): num_active_works --> 0
+wlan1: CTRL-EVENT-CONNECTED - Connection to 02:00:00:00:00:00 completed [id=0 id_str=]
+nl80211: Set wlan1 operstate 0->1 (UP)
+netlink: Operstate: ifindex=5 linkmode=-1 (no change), operstate=6 (IF_OPER_UP)
+EAPOL: External notification - portValid=1
+EAPOL: External notification - EAP success=1
+EAPOL: SUPP_PAE entering state AUTHENTICATING
+EAPOL: SUPP_BE entering state SUCCESS
+EAP: EAP entering state DISABLED
+EAPOL: SUPP_PAE entering state AUTHENTICATED
+EAPOL: Supplicant port status: Authorized
+nl80211: Set supplicant port authorized for 02:00:00:00:00:00
+EAPOL: SUPP_BE entering state IDLE
+EAPOL authentication completed - result=SUCCESS
+nl80211: Set rekey offload
+nl80211: Driver does not support rekey offload
+RTM_NEWLINK: ifi_index=5 ifname=wlan1 operstate=6 linkmode=1 ifi_family=0 ifi_flags=0x11043 ([UP][RUNNING][LOWER_UP])
+EAPOL: startWhen --> 0
+EAPOL: disable timer tick
+RTM_NEWLINK: ifi_index=4 ifname=wlan0 operstate=6 linkmode=0 ifi_family=0 ifi_flags=0x11043 ([UP][RUNNING][LOWER_UP])
+RTM_NEWLINK: ifi_index=4 ifname=wlan0 operstate=6 linkmode=0 ifi_family=0 ifi_flags=0x11043 ([UP][RUNNING][LOWER_UP])
+RTM_NEWLINK: ifi_index=4 ifname=wlan0 operstate=6 linkmode=0 ifi_family=0 ifi_flags=0x11043 ([UP][RUNNING][LOWER_UP])
+RTM_NEWLINK: ifi_index=4 ifname=wlan0 operstate=6 linkmode=0 ifi_family=0 ifi_flags=0x11043 ([UP][RUNNING][LOWER_UP])
+RTM_NEWLINK: ifi_index=7 ifname=hwsim0 operstate=0 linkmode=0 ifi_family=0 ifi_flags=0x11043 ([UP][RUNNING][LOWER_UP])
+nl80211: Ignored event (cmd=60) for foreign interface (ifindex 4 wdev 0x0)
+RTM_NEWLINK: ifi_index=5 ifname=wlan1 operstate=2 linkmode=1 ifi_family=0 ifi_flags=0x1003 ([UP])
+nl80211: Drv Event 20 (NL80211_CMD_DEL_STATION) received for wlan1
+nl80211: Delete station 02:00:00:00:00:00
+nl80211: Drv Event 39 (NL80211_CMD_DEAUTHENTICATE) received for wlan1
+nl80211: Deauthenticate event
+wlan1: Event DEAUTH (11) received
+wlan1: Deauthentication notification
+wlan1:  * reason 3
+wlan1:  * address 02:00:00:00:00:00
+Deauthentication frame IE(s) - hexdump(len=0): [NULL]
+wlan1: CTRL-EVENT-DISCONNECTED bssid=02:00:00:00:00:00 reason=3
+wlan1: Auto connect enabled: try to reconnect (wps=0/0 wpa_state=9)
+wlan1: Setting scan request: 0.100000 sec
+Added BSSID 02:00:00:00:00:00 into blacklist
+wlan1: Blacklist count 1 --> request scan in 100 ms
+wlan1: Ignore new scan request for 0.100000 sec since an earlier request is scheduled to trigger sooner
+wlan1: WPA: Clear old PMK and PTK
+wlan1: Disconnect event - remove keys
+wpa_driver_nl80211_set_key: ifindex=5 (wlan1) alg=0 addr=(nil) key_idx=0 set_tx=0 seq_len=0 key_len=0
+wpa_driver_nl80211_set_key: ifindex=5 (wlan1) alg=0 addr=(nil) key_idx=1 set_tx=0 seq_len=0 key_len=0
+wpa_driver_nl80211_set_key: ifindex=5 (wlan1) alg=0 addr=0x616317206b18 key_idx=0 set_tx=0 seq_len=0 key_len=0
+   addr=02:00:00:00:00:00
+wlan1: State: COMPLETED -> DISCONNECTED
+nl80211: Set wlan1 operstate 1->0 (DORMANT)
+netlink: Operstate: ifindex=5 linkmode=-1 (no change), operstate=5 (IF_OPER_DORMANT)
+WMM AC: WMM AC is disabled
+EAPOL: External notification - portEnabled=0
+EAPOL: SUPP_PAE entering state DISCONNECTED
+EAPOL: Supplicant port status: Unauthorized
+nl80211: Skip set_supp_port(unauthorized) while not associated
+EAPOL: SUPP_BE entering state INITIALIZE
+EAPOL: External notification - portValid=0
+EAPOL: External notification - EAP success=0
+RTM_NEWLINK: ifi_index=5 ifname=wlan1 wext ifi_family=0 ifi_flags=0x1003 ([UP])
+nl80211: Drv Event 48 (NL80211_CMD_DISCONNECT) received for wlan1
+nl80211: Ignore disconnect event when using userspace SME
+nl80211: Ignored event (cmd=20) for foreign interface (ifindex 4 wdev 0x0)
+nl80211: Ignored event (cmd=36) for foreign interface (ifindex -1 wdev 0x0)
+nl80211: Ignored event (cmd=36) for foreign interface (ifindex -1 wdev 0x0)
+wlan1: State: DISCONNECTED -> SCANNING
+wlan1: Starting AP scan for wildcard SSID
+wlan1: Add radio work 'scan'@0x61631726cf50
+wlan1: First radio work item in the queue - schedule start immediately
+wlan1: Starting radio work 'scan'@0x61631726cf50 after 0.000031 second wait
+wlan1: nl80211: scan request
+Scan requested (ret=0) - scan timeout 30 seconds
+nl80211: Drv Event 33 (NL80211_CMD_TRIGGER_SCAN) received for wlan1
+wlan1: nl80211: Scan trigger
+wlan1: Event SCAN_STARTED (46) received
+wlan1: Own scan request started a scan in 0.000067 seconds

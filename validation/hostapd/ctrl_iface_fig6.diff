@@ -1,0 +1,82 @@
+﻿diff --git "a/E:\\wireless_sec\\6\\hostapd\\ctrl_iface.c.bak_fig6" "b/E:\\wireless_sec\\6\\hostapd\\ctrl_iface.c"
+index 5dff687..c888165 100644
+--- "a/E:\\wireless_sec\\6\\hostapd\\ctrl_iface.c.bak_fig6"
++++ "b/E:\\wireless_sec\\6\\hostapd\\ctrl_iface.c"
+@@ -2770,6 +2770,65 @@ static int hostapd_renew_ptk(struct hostapd_data *hapd, const char *txtaddr)
+ 
+ 	return 0;
+ }
++
++static int hostapd_get_gtk(struct hostapd_data *hapd, char *buf, size_t buflen)
++{
++	struct wpa_group *gsm;
++	int res;
++
++	if (!hapd->wpa_auth || !hapd->wpa_auth->group)
++		return -1;
++
++	gsm = hapd->wpa_auth->group;
++	res = wpa_snprintf_hex(buf, buflen, gsm->GTK[gsm->GN - 1], gsm->GTK_len);
++	buf[res++] = '\n';
++	buf[res] = '\0';
++	return res;
++}
++
++static int hostapd_send_group_m1_with_gtk(struct hostapd_data *hapd,
++					  const char *cmd)
++{
++	u8 addr[ETH_ALEN];
++	struct sta_info *sta;
++	struct wpa_group *gsm;
++	u8 saved_gtk[WPA_GTK_MAX_LEN];
++	u8 new_gtk[WPA_GTK_MAX_LEN];
++	const char *gtk_hex;
++	int ret;
++
++	if (hwaddr_aton(cmd, addr))
++		return -1;
++
++	sta = ap_get_sta(hapd, addr);
++	if (!sta || !sta->wpa_sm)
++		return -1;
++
++	gsm = sta->wpa_sm->group;
++
++	/* cmd format: "XX:XX:XX:XX:XX:XX <gtk_hex>" */
++	gtk_hex = os_strchr(cmd, ' ');
++	if (!gtk_hex)
++		return -1;
++	gtk_hex++;
++
++	if (hexstr2bin(gtk_hex, new_gtk, gsm->GTK_len) < 0)
++		return -1;
++
++	/* Save current GTK, replace with old GTK for sending */
++	os_memcpy(saved_gtk, gsm->GTK[gsm->GN - 1], gsm->GTK_len);
++	os_memcpy(gsm->GTK[gsm->GN - 1], new_gtk, gsm->GTK_len);
++
++	wpa_printf(MSG_INFO, "FIGURE6: Sending Group Key Msg1 with old GTK to "
++		   MACSTR, MAC2STR(addr));
++
++	ret = wpa_auth_resend_group_m1(sta->wpa_sm, NULL, hapd, sta, 0);
++
++	/* Restore current GTK */
++	os_memcpy(gsm->GTK[gsm->GN - 1], saved_gtk, gsm->GTK_len);
++
++	return ret;
++}
+ #endif
+ 
+ 
+@@ -3156,6 +3215,11 @@ static int hostapd_ctrl_iface_receive_process(struct hostapd_data *hapd,
+ 	} else if (os_strncmp(buf, "RENEW_PTK ", 10) == 0) {
+ 		if (hostapd_renew_ptk(hapd, buf + 10))
+ 			reply_len = -1;
++	} else if (os_strcmp(buf, "GET_GTK") == 0) {
++		reply_len = hostapd_get_gtk(hapd, reply, reply_size);
++	} else if (os_strncmp(buf, "SEND_GROUP_M1_WITH_GTK ", 23) == 0) {
++		if (hostapd_send_group_m1_with_gtk(hapd, buf + 23) < 0)
++			reply_len = -1;
+ #endif
+ 	} else if (os_strcmp(buf, "TERMINATE") == 0) {
+ 		eloop_terminate();
