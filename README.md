@@ -99,7 +99,7 @@ to inspect proofs, attack traces, and protocol states.
 
 ## Attack & Defense Validation
 
-The `Validation` directory contains our patched wpa_supplicant, which implements the
+The `validation` directory contains our patched wpa_supplicant, which implements the
 randomization-based defense of Algorithm. 
 It contains the test results of our new attack in a typical environment: The new attack we discovered has been successfully verified,
 and the security measures we provided can defend against this attack.
