@@ -52,7 +52,7 @@ to explore the model interactively.
 
 ## Repository Structure
 
-### Formal Models
+### Formal Models in `models/` directory
 
 | File | Description |
 |--------|-------------|
