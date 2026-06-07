@@ -1,0 +1,267 @@
+theory wpa_gtk_check_gtkkeys
+
+begin
+
+functions: KDF/1, N/1, snenc/4, sndec/2, S/1, MIC/2
+builtins: symmetric-encryption, multiset, natural-numbers
+equations: sndec(snenc(message, key, IVnonce, IVnat), key) = message
+/*
+restriction Eq:
+    "All x y #i. Eq(x,y) @ i ==> x = y"
+*/
+restriction Neq:
+    "All x y #i. Neq(x,y) @ i ==> not(x = y)"
+
+restriction OnlyOneAssociate:
+    "All suppID authID PMK tid1 tid2 #i #j.
+		Associate(authID, suppID, tid1, PMK) @ i & Associate(authID, suppID, tid2, PMK) @ j 
+		==> #i = #j & tid1 = tid2 "
+
+restriction OnlyOneSupp:
+    "All suppID1 suppID2 #i #j.
+		Supp_Creat(suppID1) @ i & Supp_Creat(suppID2) @ j 
+		==> #i = #j & suppID1 = suppID2 "
+
+restriction OnlyOneAuth:
+    "All ID1 ID2 #i #j.
+		Auth_Creat(ID1) @ i & Auth_Creat(ID2) @ j 
+		==> #i = #j & ID1 = ID2 "
+
+restriction OnlyOnePMK:
+    "All PMK1 PMK2 #i #j.
+		PMK_Gen(PMK1) @ i & PMK_Gen(PMK2) @ j 
+		==> #i = #j & PMK1 = PMK2 "
+
+restriction AuthSndGtkAgain:
+    "All suppID authID tid ctr gtk loop ctr1 #i #j. not(ctr=ctr1) & 
+		Auth_Snd_GTK_Again(authID, suppID, tid, ctr, loop, gtk) @ i  & 
+		Auth_Snd_GTK_Again(authID, suppID, tid, ctr1, loop, gtk) @ j
+		==> (#i = #j)"
+
+restriction MemoryCanBeFreedOnlyOnce:
+    "All pointer #i #j. Free(pointer) @ i & Free(pointer) @ j ==> #i = #j"
+/*
+restriction MemoryCanBeReadOnlyOnce:
+    "All pointer #i #j. Read(pointer) @ i & Read(pointer) @ j ==> #i = #j"
+*/
+//****************************************************************
+/* BEGIN Setup */
+
+rule Supp_Create:
+    [ Fr(~suppID) ] 
+    --[ Supp_Creat(~suppID) ]-> 
+    [ !Supp(~suppID)
+    , Out(~suppID) ] 
+
+rule Auth_Create:
+    [ Fr(~authID) , Fr(~x) ] 
+    --[ Auth_Creat(~authID) ]->
+    [ !Auth(~authID) 
+    , Out(~authID) ]
+
+rule Auth_Supp_PMK_TID:
+	[ Fr(~PMK), !Auth(~authID), !Supp(~suppID)] 
+	--[ PMK_Gen(~PMK) ]->
+	[!PMKey(~PMK, ~authID, ~suppID, 'NULL')]
+
+rule Auth_Associate_With_Supp:
+	let 
+		GTK_WNM_Keys = <~gtk, ~gtk1, ~gtk2, ~wnm1, ~wnm2, '1'>
+	in 
+	[ !PMKey(~PMK, ~authID, ~suppID, 'NULL')
+	, Fr(~tid), Fr(~gtk), Fr(~gtk1), Fr(~gtk2),  Fr(~wnm1), Fr(~wnm2)
+	, Fr(~ptk), Fr(~oldctr), Fr(~AuthIV), Fr(~SuppIV), Fr(~point), Fr(~Loop)
+	]
+    --[ Associate(~authID, ~suppID, ~tid, ~PMK) ]->
+    [ AuthGTK('INIT_GTK', ~authID, ~suppID, ~tid, ~ptk, ~gtk, ~oldctr, ~Loop, ~SuppIV, 1:nat, ~AuthIV, 1:nat)
+	, SuppGTK('INIT_GTK', ~suppID, ~authID, ~tid, ~ptk, GTK_WNM_Keys, ~oldctr, ~Loop, ~AuthIV, 1:nat, ~SuppIV, 1:nat)
+	, !PMKey(~PMK, ~authID, ~suppID, ~tid), !GTK_Shared_Data('INIT', ~suppID, ~authID, ~tid, ~ptk, GTK_WNM_Keys, ~point)
+    ]
+
+//*******************************************************************
+//This model simulates the official security measures in GTK handshake process. If there is no //additional WNM sleep mechanism, then this security measure can resist attacks.
+
+rule Auth_Snd_Gtk:
+    let 
+		M1 = snenc(<'gtk_m1', ~gKey, S(ctr)>, ~ptk, AuthIV, N(%AIV))
+		//MIC_M1 = MIC(M1, ~ptk)
+		n1 = (%AIV %+ 1:nat)
+    in
+    [ AuthGTK('INIT_GTK', ~authID, ~suppID, ~tid, ~ptk, oldgtk, ctr, ~loop, SuppIV, %PIV, AuthIV, %AIV)
+	, Fr(~gKey)
+	]
+    --[ Auth_Snd_GTK(~authID, ~suppID, ~tid, S(ctr), ~loop, ~gKey)
+	  ]->
+    [ AuthGTK('GTK_NEGOTIATING', ~authID, ~suppID, ~tid, ~ptk, ~gKey, S(ctr), ~loop, SuppIV, %PIV, AuthIV, n1)
+	, Out(M1)]
+
+rule Auth_Snd_Gtk_Repeat:
+    let 
+		M1 = snenc(<'gtk_m1', gtk, S(ctr)>, ~ptk, AuthIV, N(%AIV))
+		//MIC_M1 = MIC(M1, ~ptk)
+		n1 = (%AIV %+ 1:nat)
+    in
+    [ AuthGTK('GTK_NEGOTIATING', ~authID, ~suppID, ~tid, ~ptk, gtk, ctr, ~loop, SuppIV, %PIV, AuthIV, %AIV)
+	]
+    --[ Auth_Snd_GTK_Again(~authID, ~suppID, ~tid, S(ctr), ~loop, gtk)
+	  ]->
+    [ AuthGTK('GTK_NEGOTIATING', ~authID, ~suppID, ~tid, ~ptk, gtk, S(ctr), ~loop, SuppIV, %PIV, AuthIV, n1)
+	, Out(M1)[+]]
+
+rule Supp_Rcv_Gtk_1:
+    let 
+		GTK_WNM_Keys = <gtk, gtk1, gtk2, ~wnm1, ~wnm2, '1'>
+		M1 = snenc(<'gtk_m1', gKey, S(ctr)>, ~ptk, newAuthIV, N(%newAIV))
+		M2 = snenc(<'gtk_m2', S(ctr)>, ~ptk, SuppIV, N(%PIV))
+		n1 = (%PIV %+ 1:nat)
+		New_Keys = <gKey, gKey, gtk2, ~wnm1, ~wnm2, '2'>
+    in
+    [ SuppGTK('INIT_GTK', ~suppID, ~authID, ~tid, ~ptk, GTK_WNM_Keys, ctr, ~loop, AuthIV, %AIV, SuppIV, %PIV)
+	, In(M1)
+	]
+    --[
+	Supp_Install_GTK(~suppID, ~authID, ~tid, S(ctr), ~loop, gtk1, gtk2, gKey, gtk2)
+		, Neq(gKey, gtk1), Neq(gKey, gtk2)
+	  ]->
+    [ SuppGTK('GTK_NEGOTIATING', ~suppID, ~authID, ~tid, ~ptk, New_Keys, S(ctr), ~loop, newAuthIV, %newAIV, SuppIV, n1)
+	, SuppGTK('Wait_GTKData', ~suppID, ~authID, ~tid, ~ptk, New_Keys, S(ctr), ~loop, newAuthIV, %newAIV, SuppIV, n1)
+	, Out(M2)]
+
+rule Supp_Rcv_Gtk_2:
+    let 
+		GTK_WNM_Keys = <gtk, gtk1, gtk2, ~wnm1, ~wnm2, '2'>
+		M1 = snenc(<'gtk_m1', gKey, S(ctr)>, ~ptk, newAuthIV, N(%newAIV))
+		M2 = snenc(<'gtk_m2', S(ctr)>, ~ptk, SuppIV, N(%PIV))
+		n1 = (%PIV %+ 1:nat)
+		New_Keys = <gKey, gtk1, gKey, ~wnm1, ~wnm2, '1'>
+    in
+    [ SuppGTK('INIT_GTK', ~suppID, ~authID, ~tid, ~ptk, GTK_WNM_Keys, ctr, ~loop, AuthIV, %AIV, SuppIV, %PIV)
+	, In(M1)
+	]
+    --[ Supp_Install_GTK(~suppID, ~authID, ~tid, S(ctr), ~loop, gtk1, gtk2, gtk1, gKey)
+		, Neq(gKey, gtk1), Neq(gKey, gtk2)
+	  ]->
+    [ SuppGTK('GTK_NEGOTIATING', ~suppID, ~authID, ~tid, ~ptk, New_Keys, S(ctr), ~loop, newAuthIV, %newAIV, SuppIV, n1)
+	, SuppGTK('Wait_GTKData', ~suppID, ~authID, ~tid, ~ptk, New_Keys, S(ctr), ~loop, newAuthIV, %newAIV, SuppIV, n1)
+	, Out(M2)]
+
+rule Supp_Rcv_Gtk_Again:
+    let 
+		GTK_WNM_Keys = <gtk, gtk1, gtk2, ~wnm1, ~wnm2, kid>
+		New_Keys = <gKey, gtk1, gtk2, ~wnm1, ~wnm2, kid>
+		M1 = snenc(<'gtk_m1', gKey, S(ctr)>, ~ptk, newAuthIV, N(%newAIV))
+		M2 = snenc(<'gtk_m2', S(ctr)>, ~ptk, SuppIV, N(%PIV))
+		n1 = (%PIV %+ 1:nat)
+    in
+    [ SuppGTK('GTK_NEGOTIATING', ~suppID, ~authID, ~tid, ~ptk, GTK_WNM_Keys, ctr, ~loop, AuthIV, %AIV, SuppIV, %PIV)
+	, In(M1)
+	]
+    --[ Supp_Install_GTK_Again(~suppID, ~authID, ~tid, S(ctr), ~loop, gKey)
+		, Neq(gKey, gtk1), Neq(gKey, gtk2) //New secure checking
+	  ]->
+    [ SuppGTK('Wait_GTKData', ~suppID, ~authID, ~tid, ~ptk, New_Keys, S(ctr), ~loop, newAuthIV, %newAIV, SuppIV, n1)
+	, Out(M2)]
+
+rule Supp_Rcv_Gtk_Command:
+    let 
+		GTK_WNM_Keys = <gtk, gtk1, gtk2, ~wnm1, ~wnm2, kid>
+		M1 = snenc(<'gtk_data', GtkData>, gtk, '0', N(1:nat))
+    in
+    [ SuppGTK('Wait_GTKData', ~suppID, ~authID, ~tid, ~ptk, GTK_WNM_Keys, S(ctr), ~loop, AuthIV, %AIV, SuppIV, %PIV), In(M1)]
+    --[ Supp_Rcv_Command(~suppID, ~authID, ~tid, S(ctr), ~loop, gtk, '0', N(1:nat), GtkData)
+	  ]->
+	 [ SuppGTK('Done_GTK', ~suppID, ~authID, ~tid, ~ptk, GTK_WNM_Keys, S(ctr), ~loop, AuthIV, %AIV, SuppIV, %PIV) 
+	 ]
+
+rule Auth_Rcv_GtkM2:
+    let 
+		M2 = snenc(<'gtk_m2', newctr>, ~ptk, newSuppIV, N(%newPIV))
+		//MIC_M2 = MIC(M2, ~ptk)
+		GtkComm = snenc(<'gtk_data', ~GtkData>, gtk, '0', N(1:nat))
+    in
+    [ AuthGTK('GTK_NEGOTIATING', ~authID, ~suppID, ~tid, ~ptk, gtk, S(ctr), ~loop, SuppIV, %PIV, AuthIV, %AIV)
+	, In(M2), Fr(~GtkData)
+	]
+    --[ Auth_Snd_Command(~authID, ~suppID, ~tid, S(ctr), ~loop, gtk, ~GtkData)
+	  ]->
+    [ AuthGTK('Done_GTK', ~authID, ~suppID, ~tid, ~ptk, gtk, S(ctr), ~loop, newSuppIV, %newPIV, AuthIV, %AIV), Out(GtkComm)]
+
+rule Auth_Supp_Gtk_ReInit:
+	let 
+		GTK_WNM_Keys = <gtk, gtk1, gtk2, ~wnm1, ~wnm2, kid>
+    in
+    [ SuppGTK('Done_GTK', ~suppID, ~authID, ~tid, ~ptk, GTK_WNM_Keys, ctr1, ~loop, newAuthIV, %newAIV, SuppIV, %PIV)  
+	, AuthGTK('Done_GTK', ~authID, ~suppID, ~tid, ~ptk, gtk, ctr2, ~loop, newSuppIV, %newPIV, AuthIV, %AIV)
+	, !GTK_Shared_Data('INIT', ~suppID, ~authID, ~tid, ~ptk, Old_Keys, ~oldpoint)
+	, Fr(~newloop), Fr(~ctr), Fr(~newpoint)
+	]
+    --[ Auth_Supp_GTKReinit(~authID, ~suppID, ~tid, ~loop, gtk), Free(~oldpoint)
+	  ]->
+    [ AuthGTK('INIT_GTK', ~authID, ~suppID, ~tid, ~ptk, gtk, S(~ctr), ~newloop, newSuppIV, %newPIV, AuthIV, %AIV)
+	, SuppGTK('INIT_GTK', ~suppID, ~authID, ~tid, ~ptk, GTK_WNM_Keys, S(~ctr), ~newloop, newAuthIV, %newAIV, SuppIV, %PIV) 
+	, !GTK_Shared_Data('GTK', ~suppID, ~authID, ~tid, ~ptk, GTK_WNM_Keys, ~newpoint)
+	]
+
+//*******************************************************************
+
+lemma Association_created [reuse]:
+    "All authID suppID tid PMK #i.
+	Associate(authID, suppID, tid, PMK) @ i
+     ==> (Ex #j. j < i & Auth_Creat(authID) @ j) &
+         (Ex #k. k < i & Supp_Creat(suppID) @ k)"
+
+lemma Association_is_unique [reuse, use_induction, heuristic=C]:
+    "All authID1 authID2 tID suppID1 suppID2 PMK1 PMK2 #i #j.
+     Associate(authID1, suppID1, tID, PMK1) @ i &
+     Associate(authID2, suppID2, tID, PMK2) @ j 
+     ==> #i = #j"
+
+lemma Auth_Snd_GTK_Entry [reuse, use_induction, heuristic=S]:
+    "All suppID authID tid ctr loop gtk #i.
+     Auth_Snd_GTK_Again(authID, suppID, tid, ctr, loop, gtk) @ i 
+     ==> (Ex ctr1 #j. Auth_Snd_GTK(authID, suppID, tid, ctr1, loop, gtk) @ j & (j < i) )"
+
+lemma Auth_Snd_GTK_unique [reuse, use_induction, heuristic=S]:
+    "All suppID authID tid ctr ctr1 loop gtk #i #j.
+     Auth_Snd_GTK(authID, suppID, tid, ctr, loop, gtk) @ i & 
+	 Auth_Snd_GTK(authID, suppID, tid, ctr1, loop, gtk) @ j
+     ==> (#i = #j)"
+
+//This lemma is satisfied since we introduce the new secure checking.
+//Such that means no attacks.
+lemma gtk_rekeys_attack [use_induction, heuristic=S]:
+	"All suppID authID tid ctr1 ctr2 gtk IVnonce IVnat GtkData1 GtkData2 loop #i #j. (i < j) & 
+			Supp_Rcv_Command(suppID, authID, tid, ctr1, loop, gtk, IVnonce, IVnat, GtkData1) @ i & 
+			Supp_Rcv_Command(suppID, authID, tid, ctr2, loop, gtk, IVnonce, IVnat, GtkData2) @ j 
+							==> not(GtkData1 = GtkData2)"
+
+//We wish to prove that the two GTK handshake processes result in all saved gtk memory cells of //supplicant being updated.
+lemma Supp_GTK_Install_GTK_Key [use_induction, heuristic=S]:
+	exists-trace
+	"Ex suppID authID tid ctr1 ctr2 loop1 loop2 newk1 newk2 k1 k2 #i #j . (i < j) & 
+		Supp_Install_GTK(suppID, authID, tid, ctr1, loop1, k1, k2, newk1, k2) @ i & 
+		Supp_Install_GTK(suppID, authID, tid, ctr2, loop2, newk1, k2, newk1, newk2) @ j	"
+
+/*
+
+==============================================================================
+summary of summaries:
+
+analyzed: WPA_GTK_Rekeys.spthy
+
+  Association_created (all-traces): verified (6 steps)
+  Association_is_unique (all-traces): verified (4 steps)
+  Auth_Snd_GTK_Entry (all-traces): verified (12 steps)
+  Auth_Snd_GTK_unique (all-traces): verified (4 steps)
+  gtk_rekeys_attack (all-traces): verified (84 steps)
+  Supp_GTK_Install_GTK_Key (exists-trace): verified (15 steps)
+
+==============================================================================
+
+real    0m5.027s
+user    0m36.327s
+sys     0m12.884s
+
+*/
+
+end
