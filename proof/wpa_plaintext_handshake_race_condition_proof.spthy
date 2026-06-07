@@ -1,0 +1,1008 @@
+theory wpa_plaintext_handshake_race_condition begin
+
+// Function signature and definition of the equational theory E
+
+builtins: multiset
+functions: KDF/1, MIC/2, N/1, S/1, fst/1, pair/2, sdec/2, senc/2,
+           snd/1, sndec/2, snenc/3
+equations:
+    fst(<x.1, x.2>) = x.1,
+    sdec(senc(x.1, x.2), x.2) = x.1,
+    snd(<x.1, x.2>) = x.2,
+    sndec(<snenc(message, key, IV), IV>, key) = message
+
+
+
+restriction Neq:
+  "∀ x y #i. (Neq( x, y ) @ #i) ⇒ (¬(x = y))"
+  // safety formula
+
+restriction Eq:
+  "∀ x y #i. (Eq( x, y ) @ #i) ⇒ (x = y)"
+  // safety formula
+
+restriction ReplayCounterM3:
+  "∀ suppID authID tid ANonce SNonce ctr gKey gtk_ctr #i.
+    (Supp_Rec_M3( suppID, authID, tid, ANonce, SNonce, ctr,
+                  <gKey, gtk_ctr>
+     ) @ #i) ⇒
+    (¬(∃ #j. (#j < #i) ∧ (SuppSeesCtr( tid, ctr ) @ #j)))"
+  // safety formula
+
+restriction ReplayCounterM3Again:
+  "∀ suppID authID tid ANonce SNonce ctr gKey gtk_ctr #i.
+    (Supp_Rec_M3Again( suppID, authID, tid, ANonce, SNonce, ctr,
+                       <gKey, gtk_ctr>
+     ) @ #i) ⇒
+    (¬(∃ #j. (#j < #i) ∧ (SuppSeesCtr( tid, ctr ) @ #j)))"
+  // safety formula
+
+rule (modulo E) KeyReveal_NonceReuse:
+   [ In( <<snenc(m1, key, IV), IV>, snenc(m2, key, IV), IV> )[+] ]
+  --[
+  Neq( <snenc(m1, key, IV), IV>, <snenc(m2, key, IV), IV> ),
+  NonceReuse( key, IV )
+  ]->
+   [ Out( key ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) KeyReveal_PMK:
+   [ !PMKey( ~PMK, ~authID, ~suppID, ~tid ) ]
+  --[ RevealPMK( ~PMK, ~authID, ~suppID ) ]->
+   [ Out( ~PMK ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Supp_Create:
+   [ Fr( ~suppID ) ]
+  --[ Supp_Creat( ~suppID ) ]->
+   [ !Supp( ~suppID ), Out( ~suppID ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Auth_Create:
+   [ Fr( ~authID ), Fr( ~x ) ]
+  --[ Auth_Creat( ~authID ) ]->
+   [ !Auth( ~authID ), Out( ~authID ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Auth_Supp_PMK_TID:
+   [ Fr( ~PMK ), !Auth( ~authID ), !Supp( ~suppID ) ]
+  -->
+   [ !PMKey( ~PMK, ~authID, ~suppID, 'NULL' ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Auth_Associate_With_Supp:
+   [
+   Fr( ~tid ), Fr( ~groupKey ),
+   !PMKey( ~PMK, ~authID, ~suppID, 'NULL' )
+   ]
+  --[ Associate( ~authID, ~suppID, ~tid, ~PMK ) ]->
+   [
+   AuthState( 'INIT_R1_SA', <~authID, ~suppID, ~tid> ),
+   SuppState( 'INIT_R1_SA', <~suppID, ~authID, ~tid> ),
+   !PMKey( ~PMK, ~authID, ~suppID, ~tid ),
+   !GTKdata_4way( <~groupKey, N('1'), ~tid> ),
+   !Supp_State( <~suppID, ~authID, ~tid, ~PMK, 'GTK_Key', 'GTK_IV', 
+                 'PTK', 'PTK_IV'>
+   ),
+   !Auth_State( <~authID, ~suppID, ~tid, ~PMK, 'PTK', 'PTK_IV'> )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Auth_Snd_M1:
+   [
+   AuthState( 'INIT_R1_SA', <~authID, ~suppID, ~tid> ), Fr( ~ANonce ),
+   Fr( ~ctr )
+   ]
+  --[ Auth_Sends_M1( ~authID, ~suppID, ~tid, ~ANonce, ~ctr ) ]->
+   [
+   AuthState( 'PTK_START', <~authID, ~suppID, ~tid, ~ANonce, S(~ctr)>
+   ),
+   Out( <~ANonce, S(~ctr)> )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Supp_RcvM1_SndM2:
+   [
+   SuppState( 'INIT_R1_SA', <~suppID, ~authID, ~tid> ),
+   !PMKey( ~PMK, ~authID, ~suppID, ~tid ),
+   In( <ANonce, S(ctr)> )[no_precomp], Fr( ~SNonce )
+   ]
+  --[
+  Supp_Rcv_M1_Snd_M2( ~suppID, ~authID, ~tid, ANonce, ~SNonce, S(ctr)
+  )
+  ]->
+   [
+   SuppState( 'PTK_START',
+              <~suppID, ~authID, ~tid, ANonce, ~SNonce, S(ctr)>
+   ),
+   Out( <<S(ctr), ~SNonce>, 
+         MIC(<S(ctr), ~SNonce>, KDF(<~PMK, ANonce, ~SNonce>))>
+   )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Auth_RcvM2_SndM3:
+   [
+   AuthState( 'PTK_START', <~authID, ~suppID, ~tid, ~ANonce, S(ctr)>
+   ),
+   !PMKey( ~PMK, ~authID, ~suppID, ~tid ),
+   !GTKdata_4way( <~gKey, N('1'), ~tid> ),
+   In( <<S(ctr), SNonce>, X> )[no_precomp]
+   ]
+  --[
+  Auth_Rcv_M2_Snd_M3( ~authID, ~suppID, ~tid, ~ANonce, SNonce,
+                      S(S(ctr)), <~gKey, N('1')>
+  ),
+  Eq( X, MIC(<S(ctr), SNonce>, KDF(<~PMK, ~ANonce, SNonce>)) )
+  ]->
+   [
+   AuthState( 'PTK_CALC_NEGOTIATING',
+              <~authID, ~suppID, ~tid, ~ANonce, SNonce, S(S(ctr)), ~gKey, N('1')>
+   ),
+   Out( <
+         <S(S(ctr)), senc(<~gKey, N('1')>, KDF(<~PMK, ~ANonce, SNonce>))>, 
+         MIC(<S(S(ctr)), senc(<~gKey, N('1')>, KDF(<~PMK, ~ANonce, SNonce>))
+             >,
+             KDF(<~PMK, ~ANonce, SNonce>))
+        >
+   )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Auth_Snd_M3_repeat:
+   [
+   AuthState( 'PTK_CALC_NEGOTIATING',
+              <~authID, ~suppID, ~tid, ~ANonce, SNonce, S(ctr), ~gKey, N('1')>
+   ),
+   !PMKey( ~PMK, ~authID, ~suppID, ~tid )
+   ]
+  --[
+  Auth_Snd_M3Again( ~authID, ~suppID, ~tid, ~ANonce, SNonce,
+                    S(S(ctr)), <~gKey, N('1')>
+  )
+  ]->
+   [
+   AuthState( 'PTK_CALC_NEGOTIATING',
+              <~authID, ~suppID, ~tid, ~ANonce, SNonce, S(S(ctr)), ~gKey, N('1')>
+   ),
+   Out( <
+         <S(S(ctr)), senc(<~gKey, N('1')>, KDF(<~PMK, ~ANonce, SNonce>))>, 
+         MIC(<S(S(ctr)), senc(<~gKey, N('1')>, KDF(<~PMK, ~ANonce, SNonce>))
+             >,
+             KDF(<~PMK, ~ANonce, SNonce>))
+        >
+   )
+   ]
+
+  // loop breaker: [0]
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Supp_Rcv_M3:
+   [
+   SuppState( 'PTK_START',
+              <~suppID, ~authID, ~tid, ANonce, ~SNonce, ctr>
+   ),
+   !PMKey( ~PMK, ~authID, ~suppID, ~tid ),
+   In( <<S(ctr), senc(<gKey, N('1')>, KDF(<~PMK, ANonce, ~SNonce>))>, 
+        X>
+   )[no_precomp]
+   ]
+  --[
+  Supp_Rec_M3( ~suppID, ~authID, ~tid, ANonce, ~SNonce, S(ctr),
+               <gKey, N('1')>
+  ),
+  Eq( X,
+      MIC(<S(ctr), senc(<gKey, N('1')>, KDF(<~PMK, ANonce, ~SNonce>))>,
+          KDF(<~PMK, ANonce, ~SNonce>))
+  ),
+  SuppSeesCtr( ~tid, S(ctr) )
+  ]->
+   [
+   SuppState( 'PTK_CALC_NEGOTIATING',
+              <~suppID, ~authID, ~tid, ANonce, ~SNonce, S(ctr), gKey, N('1')>
+   ),
+   SuppState( 'PTK_INSTALL_KEY',
+              <~suppID, ~authID, ~tid, ANonce, ~SNonce, S(ctr), gKey, N('1')>
+   )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Supp_Rcv_M3_repeat:
+   [
+   SuppState( 'PTK_CALC_NEGOTIATING',
+              <~suppID, ~authID, ~tid, ANonce, ~SNonce, S(ctr), gKey, N('1')>
+   ),
+   !PMKey( ~PMK, ~authID, ~suppID, ~tid ),
+   In( <
+        <S(ctr_new), senc(<gKey, N('1')>, KDF(<~PMK, ANonce, ~SNonce>))>, X
+       >
+   )[no_precomp]
+   ]
+  --[
+  Supp_Rec_M3Again( ~suppID, ~authID, ~tid, ANonce, ~SNonce,
+                    S(ctr_new), <gKey, N('1')>
+  ),
+  Eq( X,
+      MIC(<S(ctr_new), senc(<gKey, N('1')>, KDF(<~PMK, ANonce, ~SNonce>))
+          >,
+          KDF(<~PMK, ANonce, ~SNonce>))
+  ),
+  SuppSeesCtr( ~tid, S(ctr_new) )
+  ]->
+   [
+   SuppState( 'PTK_CALC_NEGOTIATING',
+              <~suppID, ~authID, ~tid, ANonce, ~SNonce, S(ctr_new), gKey, N('1')>
+   ),
+   SuppState( 'PTK_INSTALL_KEY',
+              <~suppID, ~authID, ~tid, ANonce, ~SNonce, S(ctr_new), gKey, N('1')>
+   )
+   ]
+
+  // loop breaker: [0]
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Supp_Install_Key_Snd_M4:
+   [
+   SuppState( 'PTK_INSTALL_KEY',
+              <~suppID, ~authID, ~tid, ANonce, ~SNonce, S(ctr), gKey, gtkctr>
+   ),
+   !PMKey( ~PMK, ~authID, ~suppID, ~tid ), Fr( ~message )
+   ]
+  --[
+  Supp_InstallKey_SndM4( ~suppID, ~authID, ~PMK, ~tid,
+                         <gKey, N('1')>, <KDF(<~PMK, ANonce, ~SNonce>), N('1')>
+  )
+  ]->
+   [
+   SuppState( 'PTK_INIT_DONE',
+              <~suppID, ~authID, ~tid, ANonce, ~SNonce, S(ctr), gKey, gtkctr>
+   ),
+   Out( <S(ctr), MIC(S(ctr), KDF(<~PMK, ANonce, ~SNonce>))> ),
+   !Supp_State( <~suppID, ~authID, ~tid, ~PMK, gKey, gtkctr, 
+                 KDF(<~PMK, ANonce, ~SNonce>), N('1')>
+   ),
+   Supp_WNM( ~suppID, ~authID, ~PMK,
+             <KDF(<~PMK, ANonce, ~SNonce>), N('1')>
+   ),
+   Out( <snenc(~message, KDF(<~PMK, ANonce, ~SNonce>), N('1')), N('1')
+        >
+   )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Auth_Rcv_M4_Install_Key:
+   [
+   AuthState( 'PTK_CALC_NEGOTIATING',
+              <~authID, ~suppID, ~tid, ~ANonce, SNonce, S(ctr), ~gKey, N('1')>
+   ),
+   In( <S(new_ctr), X> )[-, no_precomp],
+   !PMKey( ~PMK, ~authID, ~suppID, ~tid )
+   ]
+  --[
+  AuthInstalled( ~authID, ~suppID, ~tid, ~ANonce, SNonce, S(ctr),
+                 <~gKey, N('1')>
+  ),
+  Eq( X, MIC(S(new_ctr), KDF(<~PMK, ~ANonce, SNonce>)) )
+  ]->
+   [
+   AuthState( 'PTK_INIT_DONE',
+              <~authID, ~suppID, ~tid, ~ANonce, SNonce, S(ctr), ~gKey, N('1')>
+   ),
+   !Auth_State( <~authID, ~suppID, ~tid, ~PMK, 
+                 KDF(<~PMK, ~ANonce, SNonce>), N('1')>
+   ),
+   AuthStartWNMSleepModeThread( ~authID, ~suppID, ~PMK,
+                                KDF(<~PMK, ~ANonce, SNonce>)
+   )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+lemma nonce_reuse_key_type [sources]:
+  all-traces
+  "∀ key nonce #i.
+    (NonceReuse( key, nonce ) @ #i) ⇒
+    ((∃ #j. (#j < #i) ∧ (!KU( key ) @ #j)) ∨
+     (∃ PMK ANonce SNonce. key = KDF(<PMK, ANonce, SNonce>)))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ key nonce #i.
+  (NonceReuse( key, nonce ) @ #i)
+ ∧
+  (∀ #j. (!KU( key ) @ #j) ⇒ ¬(#j < #i)) ∧
+  (∀ PMK ANonce SNonce. (key = KDF(<PMK, ANonce, SNonce>)) ⇒ ⊥)"
+*/
+induction
+  case empty_trace
+  by contradiction /* from formulas */
+next
+  case non_empty_trace
+  simplify
+  solve( (last(#i))  ∥
+         (∃ #j. (!KU( key ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #i))  ∥
+         (∃ PMK ANonce SNonce. (key = KDF(<PMK, ANonce, SNonce>))) )
+    case case_1
+    solve( !KU( snenc(m1, key, nonce) )[+] @ #vk.2 )
+      case KeyReveal_NonceReuse
+      solve( (∃ #j. (!KU( t ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr))  ∥
+             (∃ PMK ANonce SNonce. (t = KDF(<PMK, ANonce, SNonce>))) )
+        case case_1
+        by contradiction /* cyclic */
+      next
+        case case_2
+        by solve( (#vl, 0) ~~> (#vk, 0) )
+      qed
+    next
+      case Supp_Install_Key_Snd_M4_case_1
+      by contradiction /* from formulas */
+    next
+      case Supp_Install_Key_Snd_M4_case_2
+      by contradiction /* from formulas */
+    next
+      case c_snenc
+      by contradiction /* from formulas */
+    qed
+  next
+    case case_2
+    by contradiction /* from formulas */
+  next
+    case case_3
+    by contradiction /* from formulas */
+  qed
+qed
+
+lemma Association_created [reuse]:
+  all-traces
+  "∀ authID suppID tid PMK #i.
+    (Associate( authID, suppID, tid, PMK ) @ #i) ⇒
+    ((∃ #j. (#j < #i) ∧ (Auth_Creat( authID ) @ #j)) ∧
+     (∃ #k. (#k < #i) ∧ (Supp_Creat( suppID ) @ #k)))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ authID suppID tid PMK #i.
+  (Associate( authID, suppID, tid, PMK ) @ #i)
+ ∧
+  ((∀ #j. (Auth_Creat( authID ) @ #j) ⇒ ¬(#j < #i)) ∨
+   (∀ #k. (Supp_Creat( suppID ) @ #k) ⇒ ¬(#k < #i)))"
+*/
+simplify
+solve( (∀ #j. (Auth_Creat( ~authID ) @ #j) ⇒ ¬(#j < #i))  ∥
+       (∀ #k. (Supp_Creat( ~suppID ) @ #k) ⇒ ¬(#k < #i)) )
+  case case_1
+  solve( !PMKey( ~PMK, ~authID, ~suppID, 'NULL' ) ▶₂ #i )
+    case Auth_Supp_PMK_TID
+    by contradiction /* from formulas */
+  qed
+next
+  case case_2
+  solve( !PMKey( ~PMK, ~authID, ~suppID, 'NULL' ) ▶₂ #i )
+    case Auth_Supp_PMK_TID
+    by contradiction /* from formulas */
+  qed
+qed
+
+lemma Association_is_unique [reuse, use_induction, heuristic=C]:
+  all-traces
+  "∀ authID1 authID2 tID suppID1 suppID2 PMK1 PMK2 #i #j.
+    ((Associate( authID1, suppID1, tID, PMK1 ) @ #i) ∧
+     (Associate( authID2, suppID2, tID, PMK2 ) @ #j)) ⇒
+    (#i = #j)"
+/*
+guarded formula characterizing all counter-examples:
+"∃ authID1 authID2 tID suppID1 suppID2 PMK1 PMK2 #i #j.
+  (Associate( authID1, suppID1, tID, PMK1 ) @ #i) ∧
+  (Associate( authID2, suppID2, tID, PMK2 ) @ #j)
+ ∧
+  ¬(#i = #j)"
+*/
+induction
+  case empty_trace
+  by contradiction /* from formulas */
+next
+  case non_empty_trace
+  simplify
+  by contradiction /* from formulas */
+qed
+
+lemma Auth_Snd_M3_Loop [reuse, use_induction, heuristic=S]:
+  all-traces
+  "∀ suppID authID tid ANonce SNonce ctr gKey #i.
+    (Auth_Snd_M3Again( authID, suppID, tid, ANonce, SNonce, ctr,
+                       <gKey, N('1')>
+     ) @ #i) ⇒
+    (∃ ctr1 #j.
+      (#j < #i) ∧
+      (Auth_Rcv_M2_Snd_M3( authID, suppID, tid, ANonce, SNonce, ctr1,
+                           <gKey, N('1')>
+       ) @ #j))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ suppID authID tid ANonce SNonce ctr gKey #i.
+  (Auth_Snd_M3Again( authID, suppID, tid, ANonce, SNonce, ctr,
+                     <gKey, N('1')>
+   ) @ #i)
+ ∧
+  ∀ ctr1 #j.
+   (Auth_Rcv_M2_Snd_M3( authID, suppID, tid, ANonce, SNonce, ctr1,
+                        <gKey, N('1')>
+    ) @ #j)
+  ⇒
+   ¬(#j < #i)"
+*/
+induction
+  case empty_trace
+  by contradiction /* from formulas */
+next
+  case non_empty_trace
+  simplify
+  solve( (last(#i))  ∥
+         (∃ ctr1 #j.
+           (Auth_Rcv_M2_Snd_M3( ~authID, ~suppID, ~tid, ~ANonce, SNonce, ctr1,
+                                <~gKey, N('1')>
+            ) @ #j)
+          ∧
+           (¬(last(#j))) ∧ (#j < #i)) )
+    case case_1
+    solve( !PMKey( ~PMK, ~authID, ~suppID, ~tid ) ▶₁ #i )
+      case Auth_Associate_With_Supp
+      solve( AuthState( 'PTK_CALC_NEGOTIATING',
+                        <~authID, ~suppID, ~tid, ~ANonce, SNonce, S(ctr), ~gKey, N('1')>
+             ) ▶₀ #i )
+        case Auth_RcvM2_SndM3
+        by contradiction /* from formulas */
+      next
+        case Auth_Snd_M3_repeat
+        by contradiction /* from formulas */
+      qed
+    qed
+  next
+    case case_2
+    by contradiction /* from formulas */
+  qed
+qed
+
+lemma Auth_Snd_M3_unique_for_ANonce [reuse, use_induction,
+                                     heuristic=S]:
+  all-traces
+  "∀ suppID authID tid1 tid2 ANonce SNonce1 SNonce2 ctr1 ctr2 gKey1
+     gKey2 #i #j.
+    ((Auth_Rcv_M2_Snd_M3( authID, suppID, tid1, ANonce, SNonce1, ctr1,
+                          <gKey1, N('1')>
+      ) @ #i) ∧
+     (Auth_Rcv_M2_Snd_M3( authID, suppID, tid2, ANonce, SNonce2, ctr2,
+                          <gKey2, N('1')>
+      ) @ #j)) ⇒
+    (#i = #j)"
+/*
+guarded formula characterizing all counter-examples:
+"∃ suppID authID tid1 tid2 ANonce SNonce1 SNonce2 ctr1 ctr2 gKey1
+   gKey2 #i #j.
+  (Auth_Rcv_M2_Snd_M3( authID, suppID, tid1, ANonce, SNonce1, ctr1,
+                       <gKey1, N('1')>
+   ) @ #i) ∧
+  (Auth_Rcv_M2_Snd_M3( authID, suppID, tid2, ANonce, SNonce2, ctr2,
+                       <gKey2, N('1')>
+   ) @ #j)
+ ∧
+  ¬(#i = #j)"
+*/
+induction
+  case empty_trace
+  by contradiction /* from formulas */
+next
+  case non_empty_trace
+  simplify
+  solve( (#i < #j)  ∥ (#j < #i) )
+    case case_1
+    solve( AuthState( 'PTK_START',
+                      <~authID, ~suppID, ~tid, ~ANonce, S(ctr)>
+           ) ▶₀ #i )
+      case Auth_Snd_M1
+      solve( !PMKey( ~PMK, ~authID, ~suppID, ~tid ) ▶₁ #i )
+        case Auth_Associate_With_Supp
+        solve( !GTKdata_4way( <~gKey, N('1'), ~tid> ) ▶₂ #i )
+          case Auth_Associate_With_Supp
+          solve( AuthState( 'PTK_START',
+                            <~authID, ~suppID, ~tid.1, ~ANonce, S(ctr.1)>
+                 ) ▶₀ #j )
+            case Auth_Snd_M1
+            by contradiction /* cyclic */
+          qed
+        qed
+      qed
+    qed
+  next
+    case case_2
+    solve( AuthState( 'PTK_START',
+                      <~authID, ~suppID, ~tid, ~ANonce, S(ctr)>
+           ) ▶₀ #i )
+      case Auth_Snd_M1
+      solve( !PMKey( ~PMK, ~authID, ~suppID, ~tid ) ▶₁ #i )
+        case Auth_Associate_With_Supp
+        solve( !GTKdata_4way( <~gKey, N('1'), ~tid> ) ▶₂ #i )
+          case Auth_Associate_With_Supp
+          solve( AuthState( 'PTK_START',
+                            <~authID, ~suppID, ~tid.1, ~ANonce, S(ctr.1)>
+                 ) ▶₀ #j )
+            case Auth_Snd_M1
+            by contradiction /* cyclic */
+          qed
+        qed
+      qed
+    qed
+  qed
+qed
+
+lemma Supp_Rcv_M3_Loop [reuse, use_induction, heuristic=S]:
+  all-traces
+  "∀ suppID authID tid ANonce SNonce ctr gKey #i.
+    (Supp_Rec_M3Again( suppID, authID, tid, ANonce, SNonce, ctr,
+                       <gKey, N('1')>
+     ) @ #i) ⇒
+    (∃ ctr1 PMK PTK Reset_IV #j #k.
+      (((#k < #i) ∧ (#j < #k)) ∧
+       (Supp_Rec_M3( suppID, authID, tid, ANonce, SNonce, ctr1,
+                     <gKey, N('1')>
+        ) @ #j)) ∧
+      (Supp_InstallKey_SndM4( suppID, authID, PMK, tid, <gKey, N('1')>,
+                              <PTK, Reset_IV>
+       ) @ #k))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ suppID authID tid ANonce SNonce ctr gKey #i.
+  (Supp_Rec_M3Again( suppID, authID, tid, ANonce, SNonce, ctr,
+                     <gKey, N('1')>
+   ) @ #i)
+ ∧
+  ∀ ctr1 PMK PTK Reset_IV #j #k.
+   (Supp_Rec_M3( suppID, authID, tid, ANonce, SNonce, ctr1,
+                 <gKey, N('1')>
+    ) @ #j) ∧
+   (Supp_InstallKey_SndM4( suppID, authID, PMK, tid, <gKey, N('1')>,
+                           <PTK, Reset_IV>
+    ) @ #k)
+  ⇒
+   ((¬(#k < #i)) ∨ (¬(#j < #k)))"
+*/
+induction
+  case non_empty_trace
+  simplify
+  solve( (last(#i))  ∥
+         (∃ ctr1 PMK PTK Reset_IV #j #k.
+           (Supp_Rec_M3( ~suppID, ~authID, ~tid, ANonce, ~SNonce, ctr1,
+                         <gKey, N('1')>
+            ) @ #j) ∧
+           (Supp_InstallKey_SndM4( ~suppID, ~authID, PMK, ~tid,
+                                   <gKey, N('1')>, <PTK, Reset_IV>
+            ) @ #k)
+          ∧
+           (¬(last(#k))) ∧ (¬(last(#j))) ∧ (#k < #i) ∧ (#j < #k)) )
+    case case_1
+    solve( !PMKey( ~PMK, ~authID, ~suppID, ~tid ) ▶₁ #i )
+      case Auth_Associate_With_Supp
+      solve( SuppState( 'PTK_CALC_NEGOTIATING',
+                        <~suppID, ~authID, ~tid, ANonce, ~SNonce, S(ctr), gKey, N('1')>
+             ) ▶₀ #i )
+        case Supp_Rcv_M3
+        solve( !KU( senc(<gKey, N('1')>, KDF(<~PMK, ANonce, ~SNonce>))
+               )[no_precomp] @ #vk.3 )
+          case Auth_RcvM2_SndM3
+          solve( !KU( MIC(<S(ctr_new), 
+                           senc(<~gKey, N('1')>, KDF(<~PMK, ~ANonce, ~SNonce>))>,
+                          KDF(<~PMK, ~ANonce, ~SNonce>))
+                 )[no_precomp] @ #vk.6 )
+            case Auth_Snd_M3_repeat
+            solve( AuthState( 'PTK_CALC_NEGOTIATING',
+                              <~authID, ~suppID, ~tid.1, ~ANonce, ~SNonce, S(ctr.1), ~gKey, 
+                               N('1')>
+                   ) ▶₀ #vr.11 )
+              case Auth_RcvM2_SndM3
+              solve( !KU( MIC(<S(S(ctr)), 
+                               senc(<~gKey, N('1')>, KDF(<~PMK, ~ANonce, ~SNonce>))>,
+                              KDF(<~PMK, ~ANonce, ~SNonce>))
+                     )[no_precomp] @ #vk.8 )
+                case Auth_RcvM2_SndM3
+                solve( !KU( ~SNonce )[no_precomp] @ #vk.14 )
+                  case Supp_RcvM1_SndM2
+                  solve( !KU( ~ANonce )[no_precomp] @ #vk.11 )
+                    case Auth_Snd_M1
+                    solve( !KU( S(S(S(~ctr))) )[no_precomp] @ #vk.11 )
+                      case c_S
+                      solve( !KU( S(S(~ctr)) ) @ #vk.13 )
+                        case Auth_RcvM2_SndM3
+                        solve( !KU( S(~ctr) )[no_precomp] @ #vk.14 )
+                          case Auth_Snd_M1
+                          solve( !KU( MIC(<S(~ctr), ~SNonce>, KDF(<~PMK, ~ANonce, ~SNonce>))
+                                 )[no_precomp] @ #vk.15 )
+                            case Supp_RcvM1_SndM2
+                            SOLVED // trace found
+                          qed
+                        qed
+                      qed
+                    qed
+                  qed
+                qed
+              qed
+            qed
+          qed
+        qed
+      qed
+    qed
+  qed
+qed
+
+lemma Supp_Rcv_M3_unique_for_SNonce [reuse, use_induction,
+                                     heuristic=C]:
+  all-traces
+  "∀ suppID authID tid1 tid2 ANonce1 ANonce2 SNonce ctr1 ctr2 gKey1
+     gKey2 #i #j.
+    ((Supp_Rec_M3( suppID, authID, tid1, ANonce1, SNonce, ctr1,
+                   <gKey1, N('1')>
+      ) @ #i) ∧
+     (Supp_Rec_M3( suppID, authID, tid2, ANonce2, SNonce, ctr2,
+                   <gKey2, N('1')>
+      ) @ #j)) ⇒
+    (#i = #j)"
+/*
+guarded formula characterizing all counter-examples:
+"∃ suppID authID tid1 tid2 ANonce1 ANonce2 SNonce ctr1 ctr2 gKey1
+   gKey2 #i #j.
+  (Supp_Rec_M3( suppID, authID, tid1, ANonce1, SNonce, ctr1,
+                <gKey1, N('1')>
+   ) @ #i) ∧
+  (Supp_Rec_M3( suppID, authID, tid2, ANonce2, SNonce, ctr2,
+                <gKey2, N('1')>
+   ) @ #j)
+ ∧
+  ¬(#i = #j)"
+*/
+induction
+  case empty_trace
+  by contradiction /* from formulas */
+next
+  case non_empty_trace
+  simplify
+  solve( (#i < #j)  ∥ (#j < #i) )
+    case case_1
+    solve( SuppState( 'PTK_START',
+                      <~suppID, ~authID, ~tid, ANonce1, ~SNonce, ctr>
+           ) ▶₀ #i )
+      case Supp_RcvM1_SndM2
+      solve( !PMKey( ~PMK, ~authID, ~suppID, ~tid ) ▶₁ #i )
+        case Auth_Associate_With_Supp
+        solve( !KU( S(S(ctr)) )[no_precomp] @ #vk.2 )
+          case Auth_RcvM2_SndM3
+          solve( !KU( senc(<gKey1, N('1')>, KDF(<~PMK, ANonce1, ~SNonce>))
+                 )[no_precomp] @ #vk.3 )
+            case Auth_RcvM2_SndM3
+            solve( SuppState( 'PTK_START',
+                              <~suppID, ~authID, ~tid.1, ANonce2, ~SNonce, ctr.1>
+                   ) ▶₀ #j )
+              case Supp_RcvM1_SndM2
+              by contradiction /* cyclic */
+            qed
+          next
+            case Auth_Snd_M3_repeat
+            solve( SuppState( 'PTK_START',
+                              <~suppID, ~authID, ~tid.1, ANonce2, ~SNonce, ctr.1>
+                   ) ▶₀ #j )
+              case Supp_RcvM1_SndM2
+              by contradiction /* cyclic */
+            qed
+          next
+            case c_senc
+            solve( SuppState( 'PTK_START',
+                              <~suppID, ~authID, ~tid.1, ANonce2, ~SNonce, ctr.1>
+                   ) ▶₀ #j )
+              case Supp_RcvM1_SndM2
+              by contradiction /* cyclic */
+            qed
+          qed
+        next
+          case Auth_Snd_M3_repeat
+          solve( !KU( senc(<gKey1, N('1')>, KDF(<~PMK, ANonce1, ~SNonce>))
+                 )[no_precomp] @ #vk.3 )
+            case Auth_RcvM2_SndM3
+            solve( SuppState( 'PTK_START',
+                              <~suppID, ~authID, ~tid.1, ANonce2, ~SNonce, ctr.1>
+                   ) ▶₀ #j )
+              case Supp_RcvM1_SndM2
+              by contradiction /* cyclic */
+            qed
+          next
+            case Auth_Snd_M3_repeat
+            solve( SuppState( 'PTK_START',
+                              <~suppID, ~authID, ~tid.1, ANonce2, ~SNonce, ctr.1>
+                   ) ▶₀ #j )
+              case Supp_RcvM1_SndM2
+              by contradiction /* cyclic */
+            qed
+          next
+            case c_senc
+            solve( SuppState( 'PTK_START',
+                              <~suppID, ~authID, ~tid.1, ANonce2, ~SNonce, ctr.1>
+                   ) ▶₀ #j )
+              case Supp_RcvM1_SndM2
+              by contradiction /* cyclic */
+            qed
+          qed
+        next
+          case c_S
+          solve( !KU( senc(<gKey1, N('1')>, KDF(<~PMK, ANonce1, ~SNonce>))
+                 )[no_precomp] @ #vk.3 )
+            case Auth_RcvM2_SndM3
+            solve( SuppState( 'PTK_START',
+                              <~suppID, ~authID, ~tid.1, ANonce2, ~SNonce, ctr.1>
+                   ) ▶₀ #j )
+              case Supp_RcvM1_SndM2
+              by contradiction /* cyclic */
+            qed
+          next
+            case Auth_Snd_M3_repeat
+            solve( SuppState( 'PTK_START',
+                              <~suppID, ~authID, ~tid.1, ANonce2, ~SNonce, ctr.1>
+                   ) ▶₀ #j )
+              case Supp_RcvM1_SndM2
+              by contradiction /* cyclic */
+            qed
+          next
+            case c_senc
+            solve( SuppState( 'PTK_START',
+                              <~suppID, ~authID, ~tid.1, ANonce2, ~SNonce, ctr.1>
+                   ) ▶₀ #j )
+              case Supp_RcvM1_SndM2
+              by contradiction /* cyclic */
+            qed
+          qed
+        qed
+      qed
+    qed
+  next
+    case case_2
+    solve( SuppState( 'PTK_START',
+                      <~suppID, ~authID, ~tid, ANonce1, ~SNonce, ctr>
+           ) ▶₀ #i )
+      case Supp_RcvM1_SndM2
+      solve( !PMKey( ~PMK, ~authID, ~suppID, ~tid ) ▶₁ #i )
+        case Auth_Associate_With_Supp
+        solve( !KU( S(S(ctr)) )[no_precomp] @ #vk.2 )
+          case Auth_RcvM2_SndM3
+          solve( !KU( senc(<gKey1, N('1')>, KDF(<~PMK, ANonce1, ~SNonce>))
+                 )[no_precomp] @ #vk.3 )
+            case Auth_RcvM2_SndM3
+            solve( SuppState( 'PTK_START',
+                              <~suppID, ~authID, ~tid.1, ANonce2, ~SNonce, ctr.1>
+                   ) ▶₀ #j )
+              case Supp_RcvM1_SndM2
+              by contradiction /* cyclic */
+            qed
+          next
+            case Auth_Snd_M3_repeat
+            solve( SuppState( 'PTK_START',
+                              <~suppID, ~authID, ~tid.1, ANonce2, ~SNonce, ctr.1>
+                   ) ▶₀ #j )
+              case Supp_RcvM1_SndM2
+              by contradiction /* cyclic */
+            qed
+          next
+            case c_senc
+            solve( SuppState( 'PTK_START',
+                              <~suppID, ~authID, ~tid.1, ANonce2, ~SNonce, ctr.1>
+                   ) ▶₀ #j )
+              case Supp_RcvM1_SndM2
+              by contradiction /* cyclic */
+            qed
+          qed
+        next
+          case Auth_Snd_M3_repeat
+          solve( !KU( senc(<gKey1, N('1')>, KDF(<~PMK, ANonce1, ~SNonce>))
+                 )[no_precomp] @ #vk.3 )
+            case Auth_RcvM2_SndM3
+            solve( SuppState( 'PTK_START',
+                              <~suppID, ~authID, ~tid.1, ANonce2, ~SNonce, ctr.1>
+                   ) ▶₀ #j )
+              case Supp_RcvM1_SndM2
+              by contradiction /* cyclic */
+            qed
+          next
+            case Auth_Snd_M3_repeat
+            solve( SuppState( 'PTK_START',
+                              <~suppID, ~authID, ~tid.1, ANonce2, ~SNonce, ctr.1>
+                   ) ▶₀ #j )
+              case Supp_RcvM1_SndM2
+              by contradiction /* cyclic */
+            qed
+          next
+            case c_senc
+            solve( SuppState( 'PTK_START',
+                              <~suppID, ~authID, ~tid.1, ANonce2, ~SNonce, ctr.1>
+                   ) ▶₀ #j )
+              case Supp_RcvM1_SndM2
+              by contradiction /* cyclic */
+            qed
+          qed
+        next
+          case c_S
+          solve( !KU( senc(<gKey1, N('1')>, KDF(<~PMK, ANonce1, ~SNonce>))
+                 )[no_precomp] @ #vk.3 )
+            case Auth_RcvM2_SndM3
+            solve( SuppState( 'PTK_START',
+                              <~suppID, ~authID, ~tid.1, ANonce2, ~SNonce, ctr.1>
+                   ) ▶₀ #j )
+              case Supp_RcvM1_SndM2
+              by contradiction /* cyclic */
+            qed
+          next
+            case Auth_Snd_M3_repeat
+            solve( SuppState( 'PTK_START',
+                              <~suppID, ~authID, ~tid.1, ANonce2, ~SNonce, ctr.1>
+                   ) ▶₀ #j )
+              case Supp_RcvM1_SndM2
+              by contradiction /* cyclic */
+            qed
+          next
+            case c_senc
+            solve( SuppState( 'PTK_START',
+                              <~suppID, ~authID, ~tid.1, ANonce2, ~SNonce, ctr.1>
+                   ) ▶₀ #j )
+              case Supp_RcvM1_SndM2
+              by contradiction /* cyclic */
+            qed
+          qed
+        qed
+      qed
+    qed
+  qed
+qed
+
+lemma krack_attack_ptk [use_induction, heuristic=S]:
+  all-traces
+  "∀ authID suppID PMK tid gKey PTK Reset_IV #i.
+    (Supp_InstallKey_SndM4( suppID, authID, PMK, tid, <gKey, N('1')>,
+                            <PTK, Reset_IV>
+     ) @ #i) ⇒
+    ((¬(∃ #j. K( PTK ) @ #j)) ∨
+     (∃ #r. RevealPMK( PMK, authID, suppID ) @ #r))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ authID suppID PMK tid gKey PTK Reset_IV #i.
+  (Supp_InstallKey_SndM4( suppID, authID, PMK, tid, <gKey, N('1')>,
+                          <PTK, Reset_IV>
+   ) @ #i)
+ ∧
+  (∃ #j. (K( PTK ) @ #j)) ∧
+  (∀ #r. (RevealPMK( PMK, authID, suppID ) @ #r) ⇒ ⊥)"
+*/
+induction
+  case non_empty_trace
+  simplify
+  solve( (last(#i))  ∥
+         (∀ #j. (K( KDF(<~PMK, ANonce, ~SNonce>) ) @ #j) ⇒ last(#j))  ∥
+         (∃ #r. (RevealPMK( ~PMK, ~authID, ~suppID ) @ #r) ∧ ¬(last(#r))) )
+    case case_2
+    solve( SuppState( 'PTK_INSTALL_KEY',
+                      <~suppID, ~authID, ~tid, ANonce, ~SNonce, S(ctr), gKey, gtkctr>
+           ) ▶₀ #i )
+      case Supp_Rcv_M3
+      solve( !PMKey( ~PMK, ~authID, ~suppID, ~tid ) ▶₁ #i )
+        case Auth_Associate_With_Supp
+        solve( !KU( KDF(<~PMK, ANonce, ~SNonce>) ) @ #vk )
+          case KeyReveal_NonceReuse
+          solve( !KU( snenc(m1, KDF(<~PMK, ANonce, ~SNonce>), IV)
+                 )[+] @ #vk.11 )
+            case Supp_Install_Key_Snd_M4_case_1
+            solve( (∀ #j.
+                     (K( KDF(<~PMK, ANonce, ~SNonce>) ) @ #j) ⇒ last(#j))  ∥
+                   (∃ #r. (RevealPMK( ~PMK, ~authID, ~suppID ) @ #r) ∧ ¬(last(#r))) )
+              case case_1
+              solve( !KU( snenc(m2, KDF(<~PMK, ANonce, ~SNonce>), N('1'))
+                     )[+] @ #vk.14 )
+                case Supp_Install_Key_Snd_M4_case_2
+                solve( (∀ #j.
+                         (K( KDF(<~PMK.1, ANonce.1, ~SNonce.1>) ) @ #j) ⇒ last(#j))  ∥
+                       (∃ #r.
+                         (RevealPMK( ~PMK.1, ~authID, ~suppID ) @ #r) ∧ ¬(last(#r))) )
+                  case case_1
+                  solve( SuppState( 'PTK_INSTALL_KEY',
+                                    <~suppID, ~authID, ~tid, ANonce.1, ~SNonce.1, S(ctr.1), gKey, 
+                                     gtkctr>
+                         ) ▶₀ #k )
+                    case Supp_Rcv_M3
+                    solve( SuppState( 'PTK_CALC_NEGOTIATING',
+                                      <~suppID, ~authID, ~tid, ANonce, ~SNonce, S(ctr.2), gKey, 
+                                       N('1')>
+                           ) ▶₀ #vr.10 )
+                      case Supp_Rcv_M3
+                      solve( !KU( senc(<gKey, N('1')>, KDF(<~PMK, ANonce, ~SNonce>))
+                             )[no_precomp] @ #vk.9 )
+                        case Auth_RcvM2_SndM3
+                        solve( !KU( MIC(<S(S(ctr)), 
+                                         senc(<~gKey, N('1')>, KDF(<~PMK, ~ANonce, ~SNonce>))>,
+                                        KDF(<~PMK, ~ANonce, ~SNonce>))
+                               )[no_precomp] @ #vk.12 )
+                          case Auth_RcvM2_SndM3
+                          solve( !KU( MIC(<S(ctr.1), 
+                                           senc(<~gKey, N('1')>, KDF(<~PMK, ~ANonce, ~SNonce>))>,
+                                          KDF(<~PMK, ~ANonce, ~SNonce>))
+                                 )[no_precomp] @ #vk.19 )
+                            case Auth_Snd_M3_repeat
+                            solve( AuthState( 'PTK_CALC_NEGOTIATING',
+                                              <~authID, ~suppID, ~tid.1, ~ANonce, ~SNonce, 
+                                               S(ctr.1), ~gKey, N('1')>
+                                   ) ▶₀ #vr.17 )
+                              case Auth_RcvM2_SndM3
+                              solve( !KU( N('1') )[+] @ #vk.19 )
+                                case c_N
+                                solve( !KU( ~SNonce )[no_precomp] @ #vk.21 )
+                                  case Supp_RcvM1_SndM2
+                                  solve( !KU( ~ANonce )[no_precomp] @ #vk.17 )
+                                    case Auth_Snd_M1
+                                    solve( !KU( S(S(~ctr)) )[no_precomp] @ #vk.18 )
+                                      case Auth_RcvM2_SndM3
+                                      solve( !KU( S(~ctr) )[no_precomp] @ #vk.20 )
+                                        case Auth_Snd_M1
+                                        solve( !KU( S(S(S(~ctr))) )[no_precomp] @ #vk.21 )
+                                          case Auth_Snd_M3_repeat
+                                          solve( AuthState( 'PTK_START',
+                                                            <~authID.1, ~suppID.1, ~tid.2, 
+                                                             ~ANonce.1, S(ctr.1)>
+                                                 ) ▶₀ #j.1 )
+                                            case Auth_Snd_M1
+                                            solve( !PMKey( ~PMK.1, ~authID.1, ~suppID.1, ~tid.1
+                                                   ) ▶₁ #j.1 )
+                                              case Auth_Associate_With_Supp
+                                              solve( !GTKdata_4way( <~gKey.1, N('1'), ~tid.1>
+                                                     ) ▶₂ #j.1 )
+                                                case Auth_Associate_With_Supp
+                                                solve( AuthState( 'PTK_CALC_NEGOTIATING',
+                                                                  <~authID.1, ~suppID.1, ~tid.1, 
+                                                                   ~ANonce.1, SNonce.1, S(S(~ctr)), 
+                                                                   ~gKey.1, N('1')>
+                                                       ) ▶₀ #vr.24 )
+                                                  case Auth_RcvM2_SndM3
+                                                  solve( !KU( MIC(<S(~ctr), ~SNonce>,
+                                                                  KDF(<~PMK, ~ANonce, ~SNonce>))
+                                                         )[no_precomp] @ #vk.22 )
+                                                    case Supp_RcvM1_SndM2
+                                                    SOLVED // trace found
+                                                  qed
+                                                qed
+                                              qed
+                                            qed
+                                          qed
+                                        qed
+                                      qed
+                                    qed
+                                  qed
+                                qed
+                              qed
+                            qed
+                          qed
+                        qed
+                      qed
+                    qed
+                  qed
+                qed
+              qed
+            qed
+          qed
+        qed
+      qed
+    qed
+  qed
+qed
+
+/* All well-formedness checks were successful. */
+
+end
