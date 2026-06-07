@@ -1,4 +1,4 @@
-# WPA KRACK Attacks Formal Models
+# WPA KRACK Attacks Models & Validation
 
 Formal verification models of WPA2 KRACK attacks developed using the Tamarin Prover.
 
