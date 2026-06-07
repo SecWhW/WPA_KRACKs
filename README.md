@@ -73,11 +73,11 @@ to explore the model interactively.
 
 ### Proofs
 
-The `Proof/` directory contains proof scripts and verification results for all models.
+The `Proof` directory contains proof scripts and verification results for all models.
 
 ### Attack Graphs
 
-The `attack_pic/` directory contains attack traces and graphical illustrations of the attacks.
+The `attack_pic` directory contains attack traces and graphical illustrations of the attacks.
 
 ---
 
