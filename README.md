@@ -1,44 +1,98 @@
-# WPA_KRACKs
+# WPA KRACK Attacks Formal Models
 
-/***********************************************/
+Formal verification models of WPA2 KRACK attacks developed using the Tamarin Prover.
 
-Prerequisites:
+---
 
-We used the latest extended Tamarin prover (version 1.7.1) to produce our formal model. Installation instructions for Tamarin can be found in https://tamarin-prover.github.io/manual/book/002_installation.html.
-Moreover, a pre-built binariy of Tamarin version that supports natural number can be found in a docker from Cremers et al. After installing Docker then one can pull the image and enter it to load our models:
+## Prerequisites
 
+We used the latest extended Tamarin Prover (version 1.7.1) to produce our formal models.
+
+### Install Tamarin
+
+Installation instructions:
+
+https://tamarin-prover.github.io/manual/book/002_installation.html
+
+### Docker Image
+
+A pre-built Tamarin version supporting natural numbers is available from Cremers et al.
+
+Pull the Docker image:
+
+```bash
 docker pull securityprotocolsresearch/tamarin:st
+```
 
+Run the container:
+
+```bash
 docker run -it securityprotocolsresearch/tamarin:st bash
+```
 
-You can copy the latest extended Tamarin prover from the image thus one can simply run our models with it.
-For example, the following command gives us a web GUI(http://127.0.0.1:3001) to explore the details of a formal model:
+You can copy the extended Tamarin binary from the image and use it to run our models.
 
- ./subterm-tamarin interactive WPA_WNM_new_attack_Fix.spthy
+### Launch Interactive GUI
 
+For example:
 
-/***********************************************/
+```bash
+./subterm-tamarin interactive WPA_WNM_new_attack_Fix.spthy
+```
 
-Files of the Formal Model:
+Then open:
 
-(1)WPA_plaintext_handshake_init.spthy: A formal model of WPA2 including details and krack attack on the plaintext handshake process.
+```text
+http://127.0.0.1:3001
+```
 
-(2)WPA_plaintext_handshake_race_condition.spthy: A formal model of WPA2 including details and krack attack on the plaintext handshake process. This model allows the Supplicant to receive two key installation commands in a row. When the Supplicant receives the key installation command again, it still sends the response message in plaintext format. As a result, there are only two encrypted messages in the protocol.
+to explore the model interactively.
 
-(3)WPA_plaintext_handshake_race_condition_newdefinition.spthy: A formal model of WPA2 including details and krack attack on the plaintext handshake process. This model allows the Supplicant to receive two key installation commands in a row. When the Supplicant receives the key installation command again, there are more than two encrypted messages in the protocol. If the attack rule with side effects is used, Tamarin will loop to find the source of the unknown ciphertext. Therefore, we used the equivalent Krack attack definition and removed the original attack rule.
+---
 
-(4)WPA_ciphertext_handshake_init.spthy: A formal model of WPA2 including details and krack attack on the ciphertext handshake.
+## Repository Structure
 
-(5)WPA_ciphertext_handshake_race_condition.spthy: A formal model of WPA2 including details and krack attack on the ciphertext handshake. This model allows the Supplicant to receive two key installation commands in a row.
+### Formal Models
 
-(6)WPA_GTK_Init_Attack.spthy: A formal model of WPA2 including details and krack attack on the GTK handshake process.
+| File | Description |
+|--------|-------------|
+| `WPA_plaintext_handshake_init.spthy` | WPA2 plaintext handshake model with KRACK attack. |
+| `WPA_plaintext_handshake_race_condition.spthy` | Plaintext handshake model allowing two consecutive key installation commands. |
+| `WPA_plaintext_handshake_race_condition_newdefinition.spthy` | Alternative attack definition to avoid Tamarin looping on unknown ciphertext sources. |
+| `WPA_ciphertext_handshake_init.spthy` | WPA2 ciphertext handshake model with KRACK attack. |
+| `WPA_ciphertext_handshake_race_condition.spthy` | Ciphertext handshake model allowing two consecutive key installation commands. |
+| `WPA_GTK_Init_Attack.spthy` | GTK handshake KRACK attack model. |
+| `WPA_GTK_Rekeys.spthy` | GTK rekeying model implementing the official two-key mitigation. |
+| `WPA_WNM_init_attack.spthy` | WNM-based attack bypassing earlier GTK protections. |
+| `WPA_WNM_new_attack.spthy` | WNM-based attack bypassing the latest four-key protection. |
+| `WPA_WNM_new_attack_Fix.spthy` | Defense model where the client randomizes all four keys. |
 
-(7)WPA_GTK_Rekeys.spthy: A model of the GTK handshake process that adds the official early security measures that required the client to keep two keys.
+---
 
-(8)WPA_WNM_init_attack.spthy: A formal model of WPA2 uses the WNM to bypass the earlier official security protections in WPA_GTK_Rekeys.
+## Additional Resources
 
-(9)WPA_WNM_new_attack.spthy: A formal model of WPA2 uses the WNM to bypass the latest official security measures, which require the client to keep four keys.
+### Proofs
 
-(10)WPA_WNM_new_attack_Fix.spthy: A defense against the latest attack in which the client randomizes four keys.
+The `Proof/` directory contains proof scripts and verification results for all models.
 
-The folder Proof contains proofs for all models, while the folder attack_pic contains all attack graphs.
+### Attack Graphs
+
+The `attack_pic/` directory contains attack traces and graphical illustrations of the attacks.
+
+---
+
+## Example
+
+Run the latest defense model:
+
+```bash
+./subterm-tamarin interactive WPA_WNM_new_attack_Fix.spthy
+```
+
+Open the generated web interface:
+
+```text
+http://127.0.0.1:3001
+```
+
+to inspect proofs, attack traces, and protocol states.
