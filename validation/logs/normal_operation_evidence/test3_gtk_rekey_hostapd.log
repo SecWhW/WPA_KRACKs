@@ -1,0 +1,22 @@
+Configuration file: /tmp/hostapd_gtk_rekey.conf
+Using interface wlan0 with hwaddr 02:00:00:00:00:00 and ssid "testnetwork"
+wlan0: interface state UNINITIALIZED->ENABLED
+wlan0: AP-ENABLED 
+wlan0: STA 02:00:00:00:01:00 IEEE 802.11: authenticated
+wlan0: STA 02:00:00:00:01:00 IEEE 802.11: associated (aid 1)
+wlan0: AP-STA-CONNECTED 02:00:00:00:01:00
+wlan0: STA 02:00:00:00:01:00 RADIUS: starting accounting session 846801DA236F7F0D
+[18:20:47] 02:00:00:00:01:00: 4-way handshake completed (RSN)
+wlan0: STA 02:00:00:00:01:00 WPA: group key handshake failed (RSN) after 4 tries
+wlan0: AP-STA-DISCONNECTED 02:00:00:00:01:00
+wlan0: STA 02:00:00:00:01:00 IEEE 802.11: authenticated
+wlan0: STA 02:00:00:00:01:00 IEEE 802.11: associated (aid 1)
+wlan0: AP-STA-CONNECTED 02:00:00:00:01:00
+wlan0: STA 02:00:00:00:01:00 RADIUS: starting accounting session 846801DA236F7F0D
+[18:21:01] 02:00:00:00:01:00: 4-way handshake completed (RSN)
+wlan0: STA 02:00:00:00:01:00 WPA: group key handshake failed (RSN) after 4 tries
+wlan0: AP-STA-DISCONNECTED 02:00:00:00:01:00
+wlan0: interface state ENABLED->DISABLED
+wlan0: AP-DISABLED 
+wlan0: CTRL-EVENT-TERMINATING 
+nl80211: deinit ifname=wlan0 disabled_11b_rates=0
