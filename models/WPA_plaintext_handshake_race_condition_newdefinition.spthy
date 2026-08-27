@@ -1,16 +1,11 @@
-theory wpa_plaintext_handshake_race_condition_new
+theory wpa_plainttext_handshake_race_condition
 
 begin
 
-// KDF:Key derivation function；N：IV(nonce) function；
-// MIC:Message integrity checking function；S：The counter function
 
-functions: KDF/1, N/1, snenc/3, sndec/2, S/1, MIC/2
-builtins: symmetric-encryption, multiset
-equations: sndec(<snenc(message, key, IV), IV>, key) = message
-
-restriction Neq:
-    "All x y #i. Neq(x, y) @ i ==> not(x = y)"
+functions: KDF/1, N/1, snenc/4, sndec/2, S/1, MIC/2
+builtins: symmetric-encryption, multiset, natural-numbers
+equations: sndec(snenc(message, key, Nonce, IVnat), key) = message
 
 restriction Eq:
     "All x y #i. Eq(x,y) @ i ==> x = y"
@@ -18,26 +13,42 @@ restriction Eq:
 restriction ReplayCounterM3:
     "All suppID authID tid ANonce SNonce ctr gKey gtk_ctr #i.
 		Supp_Rec_M3(suppID, authID, tid, ANonce, SNonce, ctr, <gKey,gtk_ctr>) @ i
-		==> not Ex #j. j < i & SuppSeesCtr(tid, ctr) @ j"
+		==> not Ex #j. (j < i) & SuppSeesCtr(tid, ctr) @ j "
 
-restriction ReplayCounterM3Again:
-    "All suppID authID tid ANonce SNonce ctr gKey gtk_ctr #i.
-		Supp_Rec_M3Again(suppID, authID, tid, ANonce, SNonce, ctr, <gKey,gtk_ctr>) @ i
-		==> not Ex #j. j < i & SuppSeesCtr(tid, ctr) @ j"
-/*
-rule KeyReveal_NonceReuse:
-    let Cipher1 = <snenc(m1, key, IV), IV>
-        Cipher2 = <snenc(m2, key, IV), IV>
-    in
-    [ In(<Cipher1, Cipher2>)[+] ]
-    --[ Neq(Cipher1, Cipher2), NonceReuse(key, IV) ]->
-    [ Out(key) ]
-*/
+restriction AuthSndM3Again:
+    "All suppID authID tid ANonce SNonce ctr gKey gtk_ctr ctr1 #i #j. not(ctr=ctr1) & 
+		Auth_Snd_M3Again(authID, suppID, tid, ANonce, SNonce, ctr, <gKey,gtk_ctr>) @ i  & 
+		Auth_Snd_M3Again(authID, suppID, tid, ANonce, SNonce, ctr1, <gKey,gtk_ctr>) @ j
+		==> (#i = #j)
+		"
 
-rule KeyReveal_PMK:
-    [ !PMKey(~PMK, ~authID, ~suppID, ~tid) ]
-    --[ RevealPMK(~PMK, ~authID,~suppID) ]->
-    [ Out(~PMK) ]
+restriction SuppRecM3Again:
+    "All suppID authID tid ANonce SNonce ctr ctr1 gKey gKey1 gtk_ctr #i #j. not(ctr=ctr1) & 
+		Supp_Rec_M3Again(suppID, authID, tid, ANonce, SNonce, ctr, <gKey,gtk_ctr>) @ i & 
+		Supp_Rec_M3Again(suppID, authID, tid, ANonce, SNonce, ctr1, <gKey1,gtk_ctr>) @ j
+		==> (#i = #j)
+		"
+
+restriction OnlyOneAssociate:
+    "All suppID authID PMK tid1 tid2 #i #j.
+		Associate(authID, suppID, tid1, PMK) @ i & Associate(authID, suppID, tid2, PMK) @ j 
+		==> #i = #j & tid1 = tid2 "
+
+restriction OnlyOneSupp:
+    "All suppID1 suppID2 #i #j.
+		Supp_Creat(suppID1) @ i & Supp_Creat(suppID2) @ j 
+		==> #i = #j & suppID1 = suppID2 "
+
+restriction OnlyOneAuth:
+    "All ID1 ID2 #i #j.
+		Auth_Creat(ID1) @ i & Auth_Creat(ID2) @ j 
+		==> #i = #j & ID1 = ID2 "
+
+restriction OnlyOnePMK:
+    "All PMK1 PMK2 #i #j.
+		PMK_Gen(PMK1) @ i & PMK_Gen(PMK2) @ j 
+		==> #i = #j & PMK1 = PMK2 "
+
 
 //****************************************************************
 /* BEGIN Setup */
@@ -56,162 +67,148 @@ rule Auth_Create:
 
 rule Auth_Supp_PMK_TID:
 	[ Fr(~PMK), !Auth(~authID), !Supp(~suppID)] 
-	--[]->
+	--[ PMK_Gen(~PMK) ]->
 	[!PMKey(~PMK, ~authID, ~suppID, 'NULL')]
 
 rule Auth_Associate_With_Supp:
-    [ Fr(~tid), Fr(~groupKey), !PMKey(~PMK, ~authID, ~suppID, 'NULL')]
+	[ !PMKey(~PMK, ~authID, ~suppID, 'NULL')
+	, Fr(~tid), Fr(~gtk), Fr(~ptk)
+	]
     --[ Associate(~authID, ~suppID, ~tid, ~PMK) ]->
-    [ AuthState('INIT_R1_SA', <~authID, ~suppID, ~tid>)
-    , SuppState('INIT_R1_SA', <~suppID, ~authID, ~tid>)
-	, !PMKey(~PMK, ~authID, ~suppID, ~tid), !GTKdata_4way(<~groupKey,N('1'),~tid>)
-	, !Supp_State(<~suppID, ~authID, ~tid, ~PMK, 'GTK_Key', 'GTK_IV', <'PTK',N('NULL')>>)
-	, !Auth_State(<~authID, ~suppID, ~tid, ~PMK, <'PTK',N('NULL')>>)
+    [ AuthState('INIT_R1_SA', ~authID, ~suppID, ~tid, ~ptk, ~gtk, 'ANonce', 'SNonce', 'Ctr', 'NULL', 1:nat, 'NULL', 1:nat)
+    , SuppState('INIT_R1_SA', ~suppID, ~authID, ~tid, ~ptk, ~gtk, 'ANonce', 'SNonce', 'Ctr', 'NULL', 1:nat, 'NULL', 1:nat)
+	, !PMKey(~PMK, ~authID, ~suppID, ~tid), !GTKdata_4way(<~gtk, 1:nat, ~tid>)
+	, !Auth_State(~authID, ~suppID, ~tid, ~PMK, <~gtk, 1:nat>, <~ptk, 'NULL', 1:nat>)
+	, !Supp_State(~suppID, ~authID, ~tid, ~PMK, <~gtk, 1:nat>, <~ptk, 'NULL', 1:nat>)
     ]
 
 rule Auth_Snd_M1:
-    [ AuthState('INIT_R1_SA', <~authID, ~suppID, ~tid>), Fr(~ANonce), Fr(~ctr)]
-    --[ Auth_Sends_M1(~authID, ~suppID, ~tid, ~ANonce, ~ctr) 
+	let 
+		m1 = <'1', ~ANonce, S(~ctr)>
+		M1 = <m1, ~ptk, ~IV, N(%pIV)>
+		n1 = (%pIV %+ 1:nat)
+	in
+    [ AuthState('INIT_R1_SA', ~authID, ~suppID, ~tid, ~ptk, ~gtk, 'ANonce', 'SNonce', 'Ctr', 'NULL', 1:nat, 'NULL', %pIV)
+	, Fr(~ANonce), Fr(~ctr), Fr(~IV)]
+    --[ Auth_Sends_M1(~authID, ~suppID, ~tid, ~ANonce, S(~ctr))
       ]->
-    [ AuthState('PTK_START', <~authID, ~suppID, ~tid, ~ANonce, S(~ctr)> )
-    , Out(<~ANonce, S(~ctr)>) ]
+    [ AuthState('PTK_START', ~authID, ~suppID, ~tid, ~ptk, ~gtk, ~ANonce, 'SNonce', S(~ctr), 'NULL', 1:nat, ~IV, n1)
+    , Out(M1) ]
 
 rule Supp_RcvM1_SndM2:
 	let 
-		M2 = <S(ctr),~SNonce> 
-		MIC_M2 = MIC(M2, KDF(<~PMK,ANonce,~SNonce>))
+		m1 = <'1', ANonce, S(ctr)>
+		M2 = <<'2', S(ctr),~SNonce>, ~ptk, ~IV, N(%pIV)>
+		MIC_M2 = MIC(M2, ~ptk)
+		n1 = (%pIV %+ 1:nat)
 	in 
-    [ SuppState('INIT_R1_SA', <~suppID, ~authID, ~tid>)
-	, !PMKey(~PMK, ~authID, ~suppID, ~tid)
-	, In(<ANonce, S(ctr)>)[no_precomp] , Fr(~SNonce)
+    [ SuppState('INIT_R1_SA', ~suppID, ~authID, ~tid, ~ptk, ~gtk, 'ANonce', 'SNonce', 'Ctr', 'NULL', 1:nat, 'NULL', %pIV)
+	, In(<m1, ~ptk, AuthIV, N(%AIV)>)[no_precomp] , Fr(~SNonce), Fr(~IV)
     ]
     --[ Supp_Rcv_M1_Snd_M2(~suppID, ~authID, ~tid, ANonce, ~SNonce, S(ctr))
       ]->
-    [ SuppState('PTK_START', <~suppID, ~authID, ~tid, ANonce, ~SNonce, S(ctr)>) 
+    [ SuppState('PTK_START', ~suppID, ~authID, ~tid, ~ptk, ~gtk, ANonce, ~SNonce, S(ctr), AuthIV, %AIV, ~IV, n1) 
     , Out(<M2, MIC_M2>) ]
 
 rule Auth_RcvM2_SndM3:
     let 
-		newPTK = KDF(<~PMK, ~ANonce, SNonce>)
-        M2 = <S(ctr), SNonce>
-		MIC_M2 = MIC(M2, newPTK)
-		M3 = <S(S(ctr)), senc(<~gKey,N('1')>, newPTK)>
-		MIC_M3 = MIC(M3, newPTK)
+		M2 = <<'2', S(~ctr), SNonce>, ~ptk, SuppIV, N(%SIV)>
+		MIC_M2 = MIC(M2, ~ptk)
+		M3 = <<'3', S(S(~ctr)), ~gKey, N(1:nat)>, ~ptk, ~IV, N(%pIV)>
+		MIC_M3 = MIC(M3, ~ptk)
+		n1 = (%pIV %+ 1:nat)
     in
-    [ AuthState('PTK_START', <~authID, ~suppID, ~tid, ~ANonce, S(ctr)>)
-	, !PMKey(~PMK, ~authID, ~suppID, ~tid) , !GTKdata_4way(<~gKey,N('1'),~tid>)
+    [ AuthState('PTK_START', ~authID, ~suppID, ~tid, ~ptk, ~gKey, ~ANonce, 'SNonce', S(~ctr), 'NULL', 1:nat, ~IV, %pIV)
 	, In(<M2, X>)[no_precomp]
 	]
-    --[ Auth_Rcv_M2_Snd_M3(~authID, ~suppID, ~tid, ~ANonce, SNonce, S(S(ctr)), <~gKey,N('1')>),
+    --[ Auth_Rcv_M2_Snd_M3(~authID, ~suppID, ~tid, ~ANonce, SNonce, S(S(~ctr)), <~gKey,N(1:nat)>),
 		Eq(X, MIC_M2)
 	  ]->
-    [ AuthState('PTK_CALC_NEGOTIATING', <~authID, ~suppID, ~tid, ~ANonce, SNonce, S(S(ctr)), <~gKey,N('1')>>)
-	, Out(<M3, MIC_M3>)	]
+    [ AuthState('PTK_CALC_NEGOTIATING', ~authID, ~suppID, ~tid, ~ptk, ~gKey, ~ANonce, SNonce, S(S(~ctr)), SuppIV, %SIV, ~IV, n1)
+	, Out(<M3, MIC_M3>)
+	]
 
 rule Auth_Snd_M3_repeat:
     let 
-        newPTK = KDF(<~PMK, ~ANonce, SNonce>)
-        M3 = <S(S(ctr)), senc(<~gKey,N('1')>, newPTK)>
-		MIC_M3 = MIC(M3, newPTK)
+        M3 = <<'3', S(S(ctr)), ~gKey, N(1:nat)>, ~ptk, ~IV, N(%pIV)>
+		MIC_M3 = MIC(M3, ~ptk)
+		n1 = (%pIV %+ 1:nat)
     in
-    [ AuthState('PTK_CALC_NEGOTIATING', <~authID, ~suppID, ~tid, ~ANonce, SNonce, S(ctr), <~gKey,N('1')>>)
-	, !PMKey(~PMK, ~authID, ~suppID, ~tid)
+    [ AuthState('PTK_CALC_NEGOTIATING', ~authID, ~suppID, ~tid, ~ptk, ~gKey, ~ANonce, SNonce, S(ctr), SuppIV, %SIV, ~IV, %pIV)
     ]
-    --[ Auth_Snd_M3Again(~authID, ~suppID, ~tid, ~ANonce, SNonce, S(S(ctr)), <~gKey,N('1')>)
+    --[ Auth_Snd_M3Again(~authID, ~suppID, ~tid, ~ANonce, SNonce, S(S(ctr)), <~gKey,N(1:nat)>)
       ]->
-    [ AuthState('PTK_CALC_NEGOTIATING', <~authID, ~suppID, ~tid, ~ANonce, SNonce, S(S(ctr)), <~gKey,N('1')>>)
+    [ AuthState('PTK_CALC_NEGOTIATING', ~authID, ~suppID, ~tid, ~ptk, ~gKey, ~ANonce, SNonce, S(S(ctr)), SuppIV, %SIV, ~IV, n1)
     , Out(<M3, MIC_M3>) ]
 
+//Assume that supplicant can still receive new m3s before installing PTK. 
+//This simulates a competitive condition for a rare condition.
 rule Supp_Rcv_M3:
     let 
-        newPTK = KDF(<~PMK, ANonce, ~SNonce>)
-		M3 = <S(ctr), senc(<gKey,N('1')>, newPTK)>
-        MIC_M3 = MIC(M3, newPTK)
+        M3 = <<'3', S(ctr), gKey, N(1:nat)>, ~ptk, AuthIV, N(%AIV)>
+		MIC_M3 = MIC(M3, ~ptk)
     in
-    [ SuppState('PTK_START', <~suppID, ~authID, ~tid, ANonce, ~SNonce, ctr>)	
-	, !PMKey(~PMK, ~authID, ~suppID, ~tid), In(<M3, X>)[no_precomp] ]
-    --[ Supp_Rec_M3(~suppID, ~authID, ~tid, ANonce, ~SNonce, S(ctr), <gKey,N('1')>)
+    [ SuppState('PTK_START', ~suppID, ~authID, ~tid, ~ptk, ~gtk, ANonce, ~SNonce, ctr, AuthIV, %oldAIV, ~IV, %pIV)	
+	, In(<M3, X>)[no_precomp] ]
+    --[ Supp_Rec_M3(~suppID, ~authID, ~tid, ANonce, ~SNonce, S(ctr), <gKey, N(1:nat)>)
       , Eq(X, MIC_M3), SuppSeesCtr(~tid, S(ctr)) ]->
-    [ SuppState('PTK_CALC_NEGOTIATING', <~suppID, ~authID, ~tid, ANonce, ~SNonce, S(ctr), <gKey,N('1')>>)
-	, SuppState('PTK_INSTALL_KEY', <~suppID, ~authID, ~tid, ANonce, ~SNonce, S(ctr), <gKey,N('1')>>)	]
+    [ SuppState('PTK_CALC_NEGOTIATING', ~suppID, ~authID, ~tid, ~ptk, gKey, ANonce, ~SNonce, S(ctr), AuthIV, %AIV, ~IV, (%pIV %+ 1:nat))
+	, SuppState('PTK_INSTALL_KEY', ~suppID, ~authID, ~tid, ~ptk, gKey, ANonce, ~SNonce, S(ctr), AuthIV, %AIV, ~IV, %pIV)	]
 
 rule Supp_Rcv_M3_repeat:
     let 
-		newPTK = KDF(<~PMK, ANonce, ~SNonce>)
-        M3 = <S(ctr_new), senc(<gKey,N('1')>, newPTK)>
-		MIC_M3 = MIC(M3, newPTK)
+		M3 = <<'3', S(ctr), gKey, N(1:nat)>, ~ptk, AuthIV, N(%AIV)>
+		MIC_M3 = MIC(M3, ~ptk)
     in
-    [ SuppState('PTK_CALC_NEGOTIATING', <~suppID, ~authID, ~tid, ANonce, ~SNonce, S(ctr), <gKey,N('1')>>)				
-    , !PMKey(~PMK, ~authID, ~suppID, ~tid), In(<M3, X>)[no_precomp]
-	]
-    --[ Supp_Rec_M3Again(~suppID, ~authID, ~tid, ANonce, ~SNonce, S(ctr_new), <gKey,N('1')>) 
-      , Eq(X, MIC_M3), SuppSeesCtr(~tid, S(ctr_new))
+    [ SuppState('PTK_CALC_NEGOTIATING', ~suppID, ~authID, ~tid, ~ptk, gtk, ANonce, ~SNonce, ctr, AuthIV, %oldAIV, ~IV, %pIV)		
+	, In(<M3, X>)[no_precomp] ]
+    --[ Supp_Rec_M3Again(~suppID, ~authID, ~tid, ANonce, ~SNonce, S(ctr), <gKey,N(1:nat)>) 
+      , Eq(X, MIC_M3), SuppSeesCtr(~tid, S(ctr)), SuppSeesAuthpIV(~suppID, ~authID, ~tid, ANonce, ~SNonce, S(ctr), AuthIV, %AIV)
 	  ]->
-    [ SuppState('PTK_CALC_NEGOTIATING', <~suppID, ~authID, ~tid, ANonce, ~SNonce, S(ctr_new), <gKey,N('1')>>)
-	, SuppState('PTK_INSTALL_KEY', <~suppID, ~authID, ~tid, ANonce, ~SNonce, S(ctr_new), <gKey,N('1')>>)
+    [ SuppState('PTK_CALC_NEGOTIATING', ~suppID, ~authID, ~tid, ~ptk, gKey, ANonce, ~SNonce, S(ctr), AuthIV, %AIV, ~IV, %pIV)
+	, SuppState('PTK_INSTALL_KEY', ~suppID, ~authID, ~tid, ~ptk, gKey, ANonce, ~SNonce, S(ctr), AuthIV, %AIV, ~IV, %pIV)
 	]
 
-rule Supp_Install_Key_Snd_plainM4:
-    let 
-        newPTK = KDF(<~PMK, ANonce, ~SNonce>)
-		M4 = S(ctr)
-        MIC_M4 = MIC(M4, newPTK)
-		Reset_IV = N('1')
-    in
-    [ SuppState('PTK_INSTALL_KEY', <~suppID, ~authID, ~tid, ANonce, ~SNonce, S(ctr), <gKey,gtkctr>>)
-	  , !Supp_State(<~suppID, ~authID, ~tid, ~PMK, 'GTK_Key', 'GTK_IV', <'PTK',N('NULL')>>)
-	  , !PMKey(~PMK, ~authID, ~suppID, ~tid), Fr(~message)
-    ]
-    --[ Supp_InstallKey_Snd_M4(~suppID, ~authID, ~PMK, ~tid, <gKey,N('1')>, <newPTK, Reset_IV>)
-      , EncWithPtk(M4)]->
-    [ SuppState('PTK_INIT_DONE',<~suppID, ~authID, ~tid, ANonce, ~SNonce, S(ctr), <gKey,gtkctr>>) 
-    , Out(<M4, MIC_M4>) , !Supp_State(<~suppID, ~authID, ~tid, ~PMK, gKey, gtkctr, <newPTK, Reset_IV>>)
-	, Supp_WNM(~suppID, ~authID, ~PMK, <newPTK, Reset_IV>)
-	, Out(<snenc(~message, newPTK, Reset_IV), Reset_IV>) 
-    ]
-
-/*
-When the PTK is installed by supplicant, the encrypted m4 is must be generated. At this point, the protocol has more than two encrypted messages such that the rule keyreveal_noncereuse is used repeatedly during system validation. Therefore, this model gives a new krack attack definition and removes the rules with side effects.
-*/
 rule Supp_Install_Key_Snd_EncM4:
     let 
         newPTK = KDF(<~PMK, ANonce, ~SNonce>)
-		Reset_IV = N('1')
-		M4 = <snenc(S(ctr), newPTK, N(PTK_IV)), N(PTK_IV)>
-        MIC_M4 = MIC(M4, newPTK)
-		Data = <snenc(~message, newPTK, Reset_IV), Reset_IV>
+		Reset_IV = N(1:nat)
+		M4 = snenc(<'4', S(ctr)>, ~ptk, ~IV, N(%pIV))
+        MIC_M4 = MIC(M4, ~ptk)
+		n1 = (%pIV %+ 1:nat)
+		Data = snenc(<'data', ~message>, newPTK, '0', Reset_IV)
     in
-    [ SuppState('PTK_INSTALL_KEY', <~suppID, ~authID, ~tid, ANonce, ~SNonce, S(ctr), <gKey,gtkctr>>)
-	  , !Supp_State(<~suppID, ~authID, ~tid, ~PMK, gtk_Key, gtk_IV, <PTK, N(PTK_IV)>>)
-	  , !PMKey(~PMK, ~authID, ~suppID, ~tid), Fr(~message) 
+    [ SuppState('PTK_INSTALL_KEY', ~suppID, ~authID, ~tid, ~ptk, gKey, ANonce, ~SNonce, S(ctr), AuthIV, %AIV, ~IV, %pIV)
+	  , !PMKey(~PMK, ~authID, ~suppID, ~tid)
+	  , Fr(~message) 
     ]
-    --[ Supp_InstallKey_Snd_M4(~suppID, ~authID, ~PMK, ~tid, <gKey,N('1')>, <newPTK, Reset_IV>)
-	  , Neq(N(PTK_IV), N('NULL')) 
-	  , EncWithPtk(M4), EncWithPtk(Data) 
+    --[ Supp_InstallKey_Snd_M4(~suppID, ~authID, ~PMK, ~tid, <gKey,N(1:nat)>, <newPTK, Reset_IV>)
+	  , EncWithPtk(Data) , EncWithPtk(M4) 
        ]->
-    [ SuppState('PTK_INIT_DONE',<~suppID, ~authID, ~tid, ANonce, ~SNonce, S(ctr), <gKey,gtkctr>>) 
-    , Out(<M4, MIC_M4>) , !Supp_State(<~suppID, ~authID, ~tid, ~PMK, gKey, gtkctr, <newPTK, Reset_IV>>)
-	, Supp_WNM(~suppID, ~authID, ~PMK, <newPTK, Reset_IV>)	
-	, Out(<snenc(~message, newPTK, Reset_IV), Reset_IV>)
+    [ SuppState('PTK_INIT_DONE', ~suppID, ~authID, ~tid, newPTK, gKey, ANonce, ~SNonce, S(ctr), AuthIV, %AIV, ~IV, n1) 
+      , Out(<M4, MIC_M4>) , !Supp_State(~suppID, ~authID, ~tid, ~PMK, <gKey, 1:nat>, <~ptk, ~IV, 1:nat>)
+	  , Supp_WNM(~suppID, ~authID, ~PMK, ~tid, newPTK)
+	  , Out(Data)[+] 
     ]
 
 rule Auth_Rcv_M4_Install_Key:
     let 
         newPTK = KDF(<~PMK, ~ANonce, SNonce>)
-		M4 = S(new_ctr)
-        MIC_M4 = MIC(M4, newPTK)
-		Reset_IV = N('1')
-        fresh_ctr = S(~counter)
+		M4 = snenc(<'4', S(ctr)>, ~ptk, SuppIV, N(%SIV))
+        MIC_M4 = MIC(M4, ~ptk)
+		Reset_IV = N(1:nat)
+		n1 = (%pIV %+ 1:nat)
     in
-    [ AuthState('PTK_CALC_NEGOTIATING', <~authID, ~suppID, ~tid, ~ANonce, SNonce, S(ctr), <~gKey,N('1')>>)
-    , In(<M4, X>)[no_precomp, -] , !PMKey(~PMK, ~authID, ~suppID, ~tid)
+    [ AuthState('PTK_CALC_NEGOTIATING', ~authID, ~suppID, ~tid, ~ptk, ~gKey, ~ANonce, SNonce, S(ctr), SuppIV, %oldSIV, ~IV, n1)
+	, !PMKey(~PMK, ~authID, ~suppID, ~tid)
+	, In(<M4, X>)[no_precomp, -] , !PMKey(~PMK, ~authID, ~suppID, ~tid)
     ]
-    --[ AuthInstalled(~authID, ~suppID, ~tid, ~ANonce, SNonce, S(ctr), <~gKey,N('1')>)
+    --[ Auth_Installkey(~authID, ~suppID, ~tid, ~ANonce, SNonce, S(ctr), <~gKey,N(1:nat)>)
       , Eq(X, MIC_M4)
     ]->
-    [ AuthState('PTK_INIT_DONE', <~authID, ~suppID, ~tid, ~ANonce, SNonce, S(ctr), <~gKey,N('1')>>)
-	, !Auth_State(<~authID,~suppID,~tid,~PMK,<newPTK,Reset_IV>>)
-    , AuthStartWNMSleepModeThread(~authID, ~suppID, ~PMK, newPTK)
+    [ AuthState('PTK_INIT_DONE', ~authID, ~suppID, ~tid, newPTK, ~gKey, ~ANonce, SNonce, S(ctr), SuppIV, %SIV, ~IV, n1)
+	, !Auth_State(~authID, ~suppID, ~tid, ~PMK, <~gKey, 1:nat>, <newPTK,~IV, Reset_IV>)
+    , Auth_WNM(~authID, ~suppID, ~PMK, ~tid, newPTK)
     ]
 
 //*******************************************************************
@@ -228,65 +225,48 @@ lemma Association_is_unique [reuse, use_induction, heuristic=C]:
      Associate(authID2, suppID2, tID, PMK2) @ j 
      ==> #i = #j"
 
+lemma Auth_Snd_M3_Loop [reuse, use_induction, heuristic=S]:
+    "All suppID authID tid ANonce SNonce ctr gKey #i. 
+		Auth_Snd_M3Again(authID, suppID, tid, ANonce, SNonce, ctr, <gKey,N(1:nat)>) @ i
+     ==> (Ex ctr1 #j . (j < i) & 
+           Auth_Rcv_M2_Snd_M3(authID, suppID, tid, ANonce, SNonce, ctr1, <gKey,N(1:nat)>) @ j )"
+
 lemma Auth_Snd_M3_unique_for_ANonce [reuse, use_induction, heuristic=S]:
     "All suppID authID tid1 tid2 ANonce SNonce1 SNonce2 ctr1 ctr2 gKey1 gKey2 #i #j. 
-		Auth_Rcv_M2_Snd_M3(authID, suppID, tid1, ANonce, SNonce1, ctr1, <gKey1,N('1')>) @ i &
-		Auth_Rcv_M2_Snd_M3(authID, suppID, tid2, ANonce, SNonce2, ctr2, <gKey2,N('1')>) @ j 
+		Auth_Rcv_M2_Snd_M3(authID, suppID, tid1, ANonce, SNonce1, ctr1, <gKey1,N(1:nat)>) @ i &
+		Auth_Rcv_M2_Snd_M3(authID, suppID, tid2, ANonce, SNonce2, ctr2, <gKey2,N(1:nat)>) @ j 
      ==> (#i = #j) "
 
-lemma Supp_Rcv_M3_Loop [reuse, use_induction, heuristic=S]:
-    "All suppID authID tid ANonce SNonce ctr gKey #i. 
-		Supp_Rec_M3Again(suppID, authID, tid, ANonce, SNonce, ctr, <gKey,N('1')>) @ i
-     ==> (Ex ctr1 #j . (j < i) &
-           Supp_Rec_M3(suppID, authID, tid, ANonce, SNonce, ctr1, <gKey,N('1')>) @ j )"
-
-lemma Supp_Rcv_M3_unique_for_SNonce [reuse, use_induction, heuristic=C]:
+lemma Supp_Rcv_M3_unique_for_SNonce [reuse, use_induction, heuristic=S]:
     "All suppID authID tid1 tid2 ANonce1 ANonce2 SNonce ctr1 ctr2 gKey1 gKey2 #i #j. 
-		Supp_Rec_M3(suppID, authID, tid1, ANonce1, SNonce, ctr1, <gKey1,N('1')>) @ i &
-		Supp_Rec_M3(suppID, authID, tid2, ANonce2, SNonce, ctr2, <gKey2,N('1')>) @ j 
+		Supp_Rec_M3(suppID, authID, tid1, ANonce1, SNonce, ctr1, <gKey1,N(1:nat)>) @ i &
+		Supp_Rec_M3(suppID, authID, tid2, ANonce2, SNonce, ctr2, <gKey2,N(1:nat)>) @ j 
      ==> (#i = #j) "
 
-lemma Supp_InstallKey_M4 [reuse, use_induction, heuristic=C]:
-    "All suppID authID tid PMK gKey PTK Reset_IV #i. 
-		Supp_InstallKey_Snd_M4(suppID, authID, PMK, tid, <gKey,N('1')>, <PTK, Reset_IV>) @ i
-     ==> (Ex ANonce SNonce ctr1 #j. (j < i) &
-           Supp_Rec_M3(suppID, authID, tid, ANonce, SNonce, ctr1, <gKey,N('1')>) @ j )
-		  | (Ex ANonce SNonce ctr2 #k. (k < i) & Supp_Rec_M3Again(suppID, authID, tid, ANonce, SNonce, ctr2, <gKey,N('1')>) @ k )" 
 
 //a new krack attack definition
-lemma krack_attack_ptk [use_induction, heuristic=S]:
-     "(
-	 All authID suppID PMK tid gKey PTK Reset_IV #i.
-	 Supp_InstallKey_Snd_M4(suppID, authID, PMK, tid, <gKey,N('1')>, <PTK, Reset_IV>) @ i 
-	 ==> 
-	 (not(Ex #i #j m1 m2. EncWithPtk(<snenc(m1, PTK, Reset_IV), Reset_IV>) @ i
-		& EncWithPtk(<snenc(m2, PTK, Reset_IV), Reset_IV>) @ j 
-	 )
-	 | (Ex #r. RevealPMK(PMK, authID, suppID) @ r ) )
-	 )
-	 "
-
-		  
-end
-
+lemma krack_attack_ptk1 [use_induction, heuristic=S]:
+	"All m1 m2 key nonce IV1 IV2 #j1 #j2. EncWithPtk(snenc(m1, key, nonce, IV1)) @ j1 
+							& EncWithPtk(snenc(m2, key, nonce, IV2)) @ j2 & not(#j1=#j2) & not(m1=m2)
+							==> not(IV1=IV2)"
 /*
 
 ==============================================================================
 summary of summaries:
 
-analyzed: WPA_plaintext_handshake_race_condition_newdefinition.spthy
+analyzed: WPA.spthy
 
   Association_created (all-traces): verified (6 steps)
   Association_is_unique (all-traces): verified (4 steps)
-  Auth_Snd_M3_unique_for_ANonce (all-traces): verified (14 steps)
-  Supp_Rcv_M3_Loop (all-traces): verified (9 steps)
-  Supp_Rcv_M3_unique_for_SNonce (all-traces): verified (52 steps)
-  Supp_InstallKey_M4 (all-traces): verified (16 steps)
-  krack_attack_ptk (all-traces): falsified - found trace (31 steps)
+  Auth_Snd_M3_Loop (all-traces): verified (8 steps)
+  Auth_Snd_M3_unique_for_ANonce (all-traces): verified (10 steps)
+  Supp_Rcv_M3_unique_for_SNonce (all-traces): verified (10 steps)
+  krack_attack_ptk1 (all-traces): falsified - found trace (31 steps)
 
 ==============================================================================
 
-real    1m9.096s
-user    7m44.046s
-sys     2m57.863s
-*/
+real    0m12.450s
+user    2m6.624s
+sys     1m54.202s
+*/	  
+end
