@@ -6,7 +6,7 @@ This directory contains the actual execution logs from the RSS-KRACK patched wpa
 
 **Date**: 2026-08-22 18:19-18:21  
 **Environment**: Ubuntu 24.04 VM with mac80211_hwsim  
-**wpa_supplicant Version**: v2.7-devel-v1-25-g2dc8012ad+ (RSS-KRACK patched)  
+**wpa_supplicant Version**: v2.10 (RSS-KRACK patched)  
 **hostapd Version**: v2.7-devel-v1-25-g2dc8012ad+ (modified for KRACK research)
 
 ---
